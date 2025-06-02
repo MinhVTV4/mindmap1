@@ -441,8 +441,8 @@ function calculatePotentialFullHeight(text, styleConfig) {
     const textPadding = style.padding;
     let iconTextWidth = 0;
     if (style.icon && style.icon !== '') {
-        const tempIcon = new Konva.Text({ text: style.icon, fontSize: style.iconSize, fontFamily: style.fontFamily });
-        iconTextWidth = tempIcon.width() + style.iconSpacing;
+        const tempIconForCalc = new Konva.Text({ text: style.icon, fontSize: style.iconSize, fontFamily: style.fontFamily });
+        iconTextWidth = tempIconForCalc.width() + style.iconSpacing;
     }
     const mainTextWidth = style.width - 2 * textPadding - iconTextWidth;
 
@@ -1177,7 +1177,7 @@ function renderNodesAndLines(nodesData) {
         const textToRender = new Konva.Text({
             text: displayText, // Use truncated text for display
             fontSize: style.fontSize, fontFamily: style.fontFamily, fill: style.textColor,
-            width: textRenderWidth > 0 ? textRenderWidth : 0, // Ensure width is not negative
+            width: textRenderWidth > 0 ? textRenderWidth : 0, // Prevent negative width
             height: textDisplayHeight, // Set to calculated display height
             x: style.padding + iconWidthForCalc, // Position text after icon and padding
             y: style.padding, // Position text with padding from top
@@ -1726,7 +1726,7 @@ async function generateExamplesWithAI(targetNodeKonva) {
                 const newNodeData = {
                     mapId: currentMindMapId,
                     parentId: targetNodeId,
-                    text: `Ví dụ: ${example}`,
+                    text: `Ví dụ: ${suggestion}`, // FIX: Changed 'example' to 'suggestion'
                     position: { x: startX + (index * 10), y: startY + (index * yOffsetIncrement) }, // Stagger positions slightly
                     style: exampleNodeStyle,
                     createdAt: serverTimestamp()
@@ -1891,7 +1891,6 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         let userMessage = "Lỗi khi AI tóm tắt nhánh: " + error.message;
          if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
@@ -1943,7 +1942,7 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
                 text: `🚀 Kế hoạch hành động:\n${actionPlanText}`,
                 position: {
                     x: targetNodeKonva.x() + parentWidth / 4 + 10,
-                    y: targetNodeKonva.y() + parentHeight + 35 // Similar positioning to summary node
+                    y: targetNodeKonva.y() + parentHeight + 35
                 },
                 style: {
                     ...DEFAULT_NODE_STYLE,
