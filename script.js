@@ -142,8 +142,49 @@ function closeAiResponseModal() {
 function openNodeContentModal(nodeTitle, fullContent) {
     if (nodeContentModalOverlay && nodeContentModalTitle && nodeContentModalBody) {
         nodeContentModalTitle.textContent = `Nội dung: ${nodeTitle.substring(0, 30)}${nodeTitle.length > 30 ? '...' : ''}`;
-        const formattedContent = fullContent.replace(/\n/g, '<br>');
-        nodeContentModalBody.innerHTML = `<div contenteditable="false" style="white-space: pre-wrap;">${formattedContent}</div>`;
+
+        // Improved content formatting: split by paragraph (multiple newlines), then replace single newlines with <br>
+        const paragraphs = fullContent.split(/\n\s*\n/); // Split by one or more newlines, possibly with spaces
+        let formattedBodyHtml = paragraphs.map(p => {
+            const trimmedP = p.trim();
+            return trimmedP ? `<p>${trimmedP.replace(/\n/g, '<br>')}</p>` : ''; // Convert remaining newlines in paragraph to <br>
+        }).join('');
+
+        nodeContentModalBody.innerHTML = `<div class="readable-content">${formattedBodyHtml}</div>`;
+
+        // Add Copy button (needs to be dynamically added to footer or header)
+        // Let's add it to the footer dynamically.
+        let modalFooter = document.querySelector('#node-content-modal-overlay .modal-footer');
+        // Ensure footer exists or create it
+        if (!modalFooter) {
+            modalFooter = document.createElement('div');
+            modalFooter.className = 'modal-footer';
+            document.querySelector('#node-content-modal-overlay .modal-content').appendChild(modalFooter);
+        }
+        // Remove existing copy button if any, to prevent duplicates
+        let existingCopyButton = modalFooter.querySelector('#copy-node-content-button');
+        if (existingCopyButton) {
+            existingCopyButton.remove();
+        }
+
+        const copyButton = document.createElement('button');
+        copyButton.id = 'copy-node-content-button';
+        copyButton.textContent = '📋 Sao chép nội dung';
+        copyButton.className = 'secondary'; // Use secondary style
+        copyButton.onclick = () => {
+            navigator.clipboard.writeText(fullContent)
+                .then(() => {
+                    copyButton.textContent = '✅ Đã sao chép!';
+                    setTimeout(() => copyButton.textContent = '📋 Sao chép nội dung', 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy text: ', err);
+                    alert('Lỗi khi sao chép nội dung.');
+                });
+        };
+        modalFooter.prepend(copyButton); // Add to the left of existing close button in footer
+
+
         showElement(nodeContentModalOverlay);
         if (currentKonvaStage && currentKonvaStage.listening()) { currentKonvaStage.listening(false); }
     }
@@ -1565,6 +1606,22 @@ async function handleSaveNodeTextFromModal() {
     }
 }
 
+
+// --- HÀM THU THẬP DỮ LIỆU NHÁNH ---
+function collectBranchDataRecursive(nodeId, allNodes, level, collectedTexts) {
+    const node = allNodes.find(n => n.id === nodeId);
+    if (!node) {
+        return; // Node not found, stop recursion for this path
+    }
+    const indent = '    '.repeat(level); // Use spaces for indentation
+    collectedTexts.push(indent + (node.text || "").trim()); // Add current node's text
+
+    const children = allNodes.filter(n => n.parentId === nodeId); // Find direct children
+    for (const child of children) {
+        collectBranchDataRecursive(child.id, allNodes, level + 1, collectedTexts); // Recurse for each child
+    }
+}
+
 /**
  * Collects the text content of a node and its ancestors up to the root,
  * forming a contextual path.
@@ -1589,12 +1646,12 @@ function getNodeContextPath(nodeId, allNodes) {
 
 
 // --- AI LOGIC FUNCTIONS (Function definitions) ---
-async function suggestChildNodesWithAI(targetNodeKonva) {
+async function suggestChildNodesWithAI(targetNodeKonva) { // Renamed parameter to targetNodeKonva
     if (!generativeModel || !targetNodeKonva || !currentMindMapId || !currentUser || !db) {
         alert("Chức năng AI chưa sẵn sàng hoặc thiếu thông tin cần thiết.");
         hideContextMenu(); return;
     }
-    const parentNodeId = targetNodeKonva.id();
+    const parentNodeId = targetNodeKonva.id(); // Use targetNodeKonva consistently
     const parentNodeData = allNodesDataForCurrentMap.find(n => n.id === parentNodeId);
     if (!parentNodeData) { alert("Không tìm thấy dữ liệu nút cha."); hideContextMenu(); return; }
 
@@ -1613,9 +1670,9 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
 
         if (suggestions.length > 0) {
             const batch = writeBatch(db);
-            let startX = targetNodeKonva.x();
-            let startY = targetNodeKonva.y();
-            const parentShape = targetNodeKonva.findOne('.nodeShape');
+            let startX = targetNodeKonva.x(); // Use targetNodeKonva consistently
+            let startY = targetNodeKonva.y(); // Use targetNodeKonva consistently
+            const parentShape = targetNodeKonva.findOne('.nodeShape'); // Use targetNodeKonva consistently
             const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
             const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
 
@@ -1694,6 +1751,7 @@ Dựa trên ngữ cảnh này, hãy viết một đoạn văn bản chi tiết h
         let userMessage = "Lỗi khi AI mở rộng ý tưởng: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         alert(userMessage);
@@ -1725,9 +1783,9 @@ async function generateExamplesWithAI(targetNodeKonva) {
 
         if (examples.length > 0) {
             const batch = writeBatch(db);
-            let startX = targetNodeKonva.x();
-            let startY = targetNodeKonva.y();
-            const parentShape = targetNodeKonva.findOne('.nodeShape');
+            let startX = targetNodeKonva.x(); // Use targetNodeKonva consistently
+            let startY = targetNodeKonva.y(); // Use targetNodeKonva consistently
+            const parentShape = targetNodeKonva.findOne('.nodeShape'); // Use targetNodeKonva consistently
             const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
             const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
 
@@ -1758,6 +1816,7 @@ async function generateExamplesWithAI(targetNodeKonva) {
         let userMessage = "Lỗi khi AI tạo ví dụ: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         alert(userMessage);
@@ -1801,6 +1860,7 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -1959,7 +2019,7 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
                 text: `🚀 Kế hoạch hành động:\n${actionPlanText}`,
                 position: {
                     x: targetNodeKonva.x() + parentWidth / 4 + 10,
-                    y: targetNodeKonva.y() + parentHeight + 35 // Similar positioning to summary node
+                    y: targetNodeKonva.y() + parentHeight + 35
                 },
                 style: {
                     ...DEFAULT_NODE_STYLE,
@@ -1990,6 +2050,7 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
         let userMessage = "Lỗi khi AI tạo kế hoạch hành động: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Nội dung của nút có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal(
@@ -2226,6 +2287,7 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
         let userMessage = "Lỗi khi AI tạo sơ đồ từ văn bản: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Văn bản đầu vào có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal("Lỗi AI Tạo Sơ đồ", textContent, userMessage);
