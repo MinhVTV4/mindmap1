@@ -441,8 +441,8 @@ function calculatePotentialFullHeight(text, styleConfig) {
     const textPadding = style.padding;
     let iconTextWidth = 0;
     if (style.icon && style.icon !== '') {
-        const tempIconForCalc = new Konva.Text({ text: style.icon, fontSize: style.iconSize, fontFamily: style.fontFamily });
-        iconTextWidth = tempIconForCalc.width() + style.iconSpacing;
+        const tempIcon = new Konva.Text({ text: style.icon, fontSize: style.iconSize, fontFamily: style.fontFamily });
+        iconTextWidth = tempIcon.width() + style.iconSpacing;
     }
     const mainTextWidth = style.width - 2 * textPadding - iconTextWidth;
 
@@ -504,7 +504,7 @@ async function loadUserMindMaps() {
 
     // Clear previous lists and show loading indicators
     if(normalMindmapListLoading) showElement(normalMindmapListLoading);
-    if(aiMindmapListLoading) hideElement(aiMindmapListLoading); // Hide AI loading initially
+    if(aiMindmapListLoading) showElement(aiMindmapListLoading); // Show AI loading initially
     if(normalMindmapListUl) normalMindmapListUl.innerHTML = '';
     if(aiMindmapListUl) aiMindmapListUl.innerHTML = '';
 
@@ -763,35 +763,41 @@ function initKonvaStage() {
         const touches = e_stage.evt.touches;
 
         // Pinch-to-zoom logic
-        if (touches && touches.length === 2 && lastDist > 0) { // If two touches and pinch has started
-            e_stage.evt.preventDefault();
+        if (touches && touches.length === 2) { // Only process if two touches are active
+            e_stage.evt.preventDefault(); // Prevent default browser zoom/scroll
+
             const touch1 = touches[0];
             const touch2 = touches[1];
-            const newCenter = getCenter({ x: touch1.clientX, y: touch1.clientY }, { x: touch2.clientX, y: touch2.clientY });
-            const newDist = getDistance({ x: touch1.clientX, y: touch1.clientY }, { x: touch2.clientX, y: touch2.clientY });
 
-            const pointTo = { // Calculate mouse pointer position relative to the stage
-                x: (newCenter.x - currentKonvaStage.x()) / currentKonvaStage.scaleX(),
-                y: (newCenter.y - currentKonvaStage.y()) / currentKonvaStage.scaleX(),
-            };
+            const currentCenter = getCenter({ x: touch1.clientX, y: touch1.clientY }, { x: touch2.clientX, y: touch2.clientY });
+            const currentDist = getDistance({ x: touch1.clientX, y: touch1.clientY }, { x: touch2.clientX, y: touch2.clientY });
 
-            const newScale = currentKonvaStage.scaleX() * (newDist / lastDist); // Calculate new scale
+            if (lastDist > 0) { // Only zoom if a previous distance was recorded (i.e., pinch has started)
+                const pointTo = { // Calculate mouse pointer position relative to the stage
+                    x: (currentCenter.x - currentKonvaStage.x()) / currentKonvaStage.scaleX(),
+                    y: (currentCenter.y - currentKonvaStage.y()) / currentKonvaStage.scaleX(),
+                };
 
-            currentKonvaStage.scale({ x: newScale, y: newScale });
-            
-            // Calculate new position of the stage
-            const dx = newCenter.x - lastCenter.x;
-            const dy = newCenter.y - lastCenter.y;
+                const newScale = currentKonvaStage.scaleX() * (currentDist / lastDist); // Calculate new scale
 
-            const newPos = {
-                x: newCenter.x - pointTo.x * newScale + dx,
-                y: newCenter.y - pointTo.y * newScale + dy,
-            };
-            currentKonvaStage.position(newPos);
-            currentKonvaStage.batchDraw();
+                currentKonvaStage.scale({ x: newScale, y: newScale });
+                
+                // Calculate new position of the stage
+                const dx = currentCenter.x - lastCenter.x;
+                const dy = currentCenter.y - lastCenter.y;
 
-            lastDist = newDist;
-            lastCenter = newCenter;
+                const newPos = {
+                    x: currentCenter.x - pointTo.x * newScale + dx,
+                    y: currentCenter.y - pointTo.y * newScale + dy,
+                };
+                currentKonvaStage.position(newPos);
+                currentKonvaStage.batchDraw();
+            }
+
+            lastDist = currentDist;
+            lastCenter = currentCenter;
+            potentiallyDraggedNode = null; // Ensure no node dragging during pinch
+            currentKonvaStage.draggable(false); // Disable stage dragging during pinch
             return; // Stop further processing for mousemove/touchmove if it's a pinch
         }
 
@@ -1737,7 +1743,6 @@ async function generateExamplesWithAI(targetNodeKonva) {
         let userMessage = "Lỗi khi AI tạo ví dụ: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         alert(userMessage);
@@ -1886,6 +1891,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         let userMessage = "Lỗi khi AI tóm tắt nhánh: " + error.message;
          if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
@@ -1968,7 +1974,6 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
         let userMessage = "Lỗi khi AI tạo kế hoạch hành động: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Nội dung của nút có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal(
@@ -2205,6 +2210,7 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
         let userMessage = "Lỗi khi AI tạo sơ đồ từ văn bản: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Văn bản đầu vào có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal("Lỗi AI Tạo Sơ đồ", textContent, userMessage);
@@ -2637,14 +2643,21 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (ctxGenerateActionPlanButton) {
-        ctxGenerateActionPlanPlan.addEventListener('click', async () => { // FIX: Changed to targetNodeKonva
+        // FIX: Corrected variable name from ctxGenerateActionPlanPlan to ctxGenerateActionPlanButton
+        ctxGenerateActionPlanButton.addEventListener('click', async () => {
             let targetNodeForPlan = rightClickedKonvaNode || selectedKonvaNode;
-            if (targetNodeForPlan) { await generateActionPlanWithAI(targetNodeForPlan); }
-            else { alert("Vui lòng chọn một nút để AI tạo kế hoạch hành động."); hideContextMenu(); }
+            if (!targetNodeForPlan) { // Added check for targetNodeForPlan
+                alert("Vui lòng chọn một nút để AI tạo kế hoạch hành động.");
+                hideContextMenu();
+                return;
+            }
+            await generateActionPlanWithAI(targetNodeForPlan);
+            hideContextMenu();
         });
     }
     if (ctxDeleteNodeButton) {
         ctxDeleteNodeButton.addEventListener('click', async () => {
+            console.log("Delete Node button clicked in context menu."); // Debug log
             let targetNode = rightClickedKonvaNode || selectedKonvaNode;
             if (!targetNode || !currentMindMapId || !db) {
                  alert("Không thể xóa nút. Vui lòng thử lại."); hideContextMenu(); return;
