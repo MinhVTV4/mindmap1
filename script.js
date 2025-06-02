@@ -1258,18 +1258,18 @@ function renderNodesAndLines(nodesData) {
         }
         group.add(textToRender);
 
-        // If text is truncated, clicking the text area itself (not just "read more") should also open the modal
-        if (isTextTruncated) {
-            textToRender.on('click tap', (ev) => {
-                const isPrimaryInteraction = (ev.evt.button === 0 && ev.type === 'click') || ev.type === 'tap';
-                if (isPrimaryInteraction && !contextMenuJustOpened) {
-                    openNodeContentModal(nodeData.text.substring(0,30)+"...", fullText);
-                } else if (contextMenuJustOpened) {
-                    contextMenuJustOpened = false;
-                }
-                ev.evt.cancelBubble = true;
-            });
-        }
+        // REMOVED: The problematic listener that opened modal on text click
+        // if (isTextTruncated) {
+        //     textToRender.on('click tap', (ev) => {
+        //         const isPrimaryInteraction = (ev.evt.button === 0 && ev.type === 'click') || ev.type === 'tap';
+        //         if (isPrimaryInteraction && !contextMenuJustOpened) {
+        //             openNodeContentModal(nodeData.text.substring(0,30)+"...", fullText);
+        //         } else if (contextMenuJustOpened) {
+        //             contextMenuJustOpened = false;
+        //         }
+        //         ev.evt.cancelBubble = true;
+        //     });
+        // }
 
         // Event listener for node drag end
         group.on('dragend', async function() {
@@ -1306,14 +1306,8 @@ function renderNodesAndLines(nodesData) {
                 if (contextMenuJustOpened) { // If context menu was just opened by this click/tap (e.g., long press)
                     contextMenuJustOpened = false; // Reset the flag
                 } else { // If it's a normal click/tap not related to context menu opening
-                    const fullTextFromAttr = this.getAttr('fullTextData');
-                    const hasReadMore = this.findOne('.readMoreIndicator');
-                    // If node has "Read more" and the click was on the text or shape (not the indicator itself)
-                    if (hasReadMore && (e.target.name() === 'nodeTextContent' || e.target.name() === 'nodeShape' || e.target === this ) ) {
-                        if (e.target.name() !== 'nodeTextContent' && e.target.name() !== 'readMoreIndicator') { // Avoid double-opening if text itself was clicked
-                             openNodeContentModal(fullTextFromAttr.substring(0,30)+"...", fullTextFromAttr);
-                        }
-                    }
+                    // This is for selection, not opening modal.
+                    // The modal opening is now exclusively handled by the 'readMoreIndicator'
                 }
             }
 
@@ -1646,12 +1640,12 @@ function getNodeContextPath(nodeId, allNodes) {
 
 
 // --- AI LOGIC FUNCTIONS (Function definitions) ---
-async function suggestChildNodesWithAI(targetNodeKonva) { // Renamed parameter to targetNodeKonva
+async function suggestChildNodesWithAI(targetNodeKonva) {
     if (!generativeModel || !targetNodeKonva || !currentMindMapId || !currentUser || !db) {
         alert("Chức năng AI chưa sẵn sàng hoặc thiếu thông tin cần thiết.");
         hideContextMenu(); return;
     }
-    const parentNodeId = targetNodeKonva.id(); // Use targetNodeKonva consistently
+    const parentNodeId = targetNodeKonva.id();
     const parentNodeData = allNodesDataForCurrentMap.find(n => n.id === parentNodeId);
     if (!parentNodeData) { alert("Không tìm thấy dữ liệu nút cha."); hideContextMenu(); return; }
 
@@ -1670,9 +1664,9 @@ async function suggestChildNodesWithAI(targetNodeKonva) { // Renamed parameter t
 
         if (suggestions.length > 0) {
             const batch = writeBatch(db);
-            let startX = targetNodeKonva.x(); // Use targetNodeKonva consistently
-            let startY = targetNodeKonva.y(); // Use targetNodeKonva consistently
-            const parentShape = targetNodeKonva.findOne('.nodeShape'); // Use targetNodeKonva consistently
+            let startX = targetNodeKonva.x();
+            let startY = targetNodeKonva.y();
+            const parentShape = targetNodeKonva.findOne('.nodeShape');
             const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
             const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
 
@@ -1783,9 +1777,9 @@ async function generateExamplesWithAI(targetNodeKonva) {
 
         if (examples.length > 0) {
             const batch = writeBatch(db);
-            let startX = targetNodeKonva.x(); // Use targetNodeKonva consistently
-            let startY = targetNodeKonva.y(); // Use targetNodeKonva consistently
-            const parentShape = targetNodeKonva.findOne('.nodeShape'); // Use targetNodeKonva consistently
+            let startX = targetNodeKonva.x();
+            let startY = targetNodeKonva.y();
+            const parentShape = targetNodeKonva.findOne('.nodeShape');
             const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
             const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
 
@@ -1800,7 +1794,7 @@ async function generateExamplesWithAI(targetNodeKonva) {
                     mapId: currentMindMapId,
                     parentId: targetNodeId,
                     text: `Ví dụ: ${suggestion}`, // FIX: Changed 'example' to 'suggestion'
-                    position: { x: startX + (index * 10), y: startY + (index * yOffsetIncrement) }, // Stagger positions slightly
+                    position: { x: startX, y: startY + (index * yOffsetIncrement) },
                     style: exampleNodeStyle,
                     createdAt: serverTimestamp()
                 };
@@ -1966,6 +1960,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         let userMessage = "Lỗi khi AI tóm tắt nhánh: " + error.message;
          if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
@@ -2050,9 +2045,8 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
         let userMessage = "Lỗi khi AI tạo kế hoạch hành động: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
-        else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Nội dung của nút có thể chứa từ khóa nhạy cảm.";}
+        else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal(
             `Lỗi AI khi tạo kế hoạch hành động`,
             `Mục tiêu/Vấn đề: ${nodeContent}`,
