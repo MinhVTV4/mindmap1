@@ -21,7 +21,8 @@ import {
     serverTimestamp,
     onSnapshot,
     writeBatch
-} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+}
+from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-ai.js";
 
 
@@ -100,7 +101,11 @@ let nodeContentModalOverlay, nodeContentModalTitle, nodeContentModalBody, nodeCo
 let editNodeTextModalOverlay, editNodeTextModalTitle, editNodeTextarea, editNodeTextModalSaveButton, editNodeTextModalCancelButton, editNodeTextModalCloseButton; // NEW modal elements
 let authSection, loginForm, registerForm, loginEmailInput, loginPasswordInput, loginButton, showRegisterLink, registerEmailInput, registerPasswordInput, registerButton, showLoginLink, loginErrorMsg, registerErrorMsg;
 let mainAppSection, mainAppTitle, userEmailDisplay, logoutButton;
-let mindmapManagementView, newMindmapTitleInput, createMindmapButton, mindmapListUl, mindmapListLoading;
+let mindmapManagementView, newMindmapTitleInput, createMindmapButton;
+// Renamed mindmapListUl to normalMindmapListUl for clarity
+let normalMindmapListUl, normalMindmapListLoading; // Renamed
+// NEW: Variables for AI mindmap list
+let aiMindmapListUl, aiMindmapListLoading;
 let canvasView, backToMapsListButton, currentMindmapTitleDisplay, addChildNodeButton, deleteNodeButton, zoomInButton, zoomOutButton, resetZoomButton, konvaContainer, konvaContainerLoading;
 let aiTextInput, generateMindmapFromTextButton, aiMindmapTitleInput; // NEW variables for AI from text
 let toggleGridCheckbox, toggleSnapToGridCheckbox, gridSizeInput; // NEW variables for grid controls
@@ -291,7 +296,8 @@ function authStateChangedHandler(user) {
         hideElement(canvasView); // Hide canvas if logged out
         if(nodeStylePanel) hideElement(nodeStylePanel);
         hideContextMenu();
-        if(mindmapListUl) mindmapListUl.innerHTML = ''; // Clear mind map list
+        if(normalMindmapListUl) normalMindmapListUl.innerHTML = ''; // Clear normal mind map list
+        if(aiMindmapListUl) aiMindmapListUl.innerHTML = ''; // Clear AI mind map list
         window.removeEventListener('keydown', handleGlobalKeyDown);
     }
 }
@@ -467,6 +473,7 @@ async function handleCreateMindmap() {
             title: title,
             createdAt: serverTimestamp(),
             lastModified: serverTimestamp(),
+            type: 'normal', // NEW: Add type for normal mind map
             canvasState: {
                 scaleX: 1, scaleY: 1, x: 0, y: 0,
                 isGridVisible: false, // NEW: Default grid off
@@ -494,55 +501,104 @@ async function handleCreateMindmap() {
 }
 async function loadUserMindMaps() {
     if (!currentUser || !db) return;
-    if(mindmapListLoading) showElement(mindmapListLoading);
-    if(mindmapListUl) mindmapListUl.innerHTML = ''; // Clear previous list
+
+    // Clear previous lists and show loading indicators
+    if(normalMindmapListLoading) showElement(normalMindmapListLoading);
+    if(aiMindmapListLoading) showElement(aiMindmapListLoading);
+    if(normalMindmapListUl) normalMindmapListUl.innerHTML = '';
+    if(aiMindmapListUl) aiMindmapListUl.innerHTML = '';
+
+    // Unsubscribe from any previous listeners to prevent duplicates or outdated listeners
+    if (typeof window.normalMindmapsListenerUnsubscribe === 'function') {
+        window.normalMindmapsListenerUnsubscribe();
+    }
+    if (typeof window.aiMindmapsListenerUnsubscribe === 'function') {
+        window.aiMindmapsListenerUnsubscribe();
+    }
 
     try {
-        const q = query(collection(db, "mindmaps"), where("userId", "==", currentUser.uid));
-        // Unsubscribe from any previous listener to prevent duplicates or outdated listeners
-        if (typeof window.mindmapsListenerUnsubscribe === 'function') {
-            window.mindmapsListenerUnsubscribe();
-        }
-        window.mindmapsListenerUnsubscribe = onSnapshot(q, (querySnapshot) => {
-            if(mindmapListUl) mindmapListUl.innerHTML = ''; // Clear list on each update
+        // Query for normal mind maps
+        const qNormal = query(collection(db, "mindmaps"),
+                              where("userId", "==", currentUser.uid),
+                              where("type", "==", "normal"));
+        window.normalMindmapsListenerUnsubscribe = onSnapshot(qNormal, (querySnapshot) => {
+            if(normalMindmapListUl) normalMindmapListUl.innerHTML = ''; // Clear list on each update
             if (querySnapshot.empty) {
-                if(mindmapListUl) mindmapListUl.innerHTML = '<li>Bạn chưa có sơ đồ nào. Hãy tạo một cái mới!</li>';
+                if(normalMindmapListUl) normalMindmapListUl.innerHTML = '<li>Bạn chưa có sơ đồ thường nào.</li>';
             }
             querySnapshot.forEach((docSnap) => {
                 const map = { id: docSnap.id, ...docSnap.data() };
                 const li = document.createElement('li');
                 li.textContent = map.title;
                 li.dataset.mapId = map.id;
-                li.dataset.mapTitle = map.title; // Store title for easy access
+                li.dataset.mapTitle = map.title;
 
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = 'Xóa';
-                deleteButton.classList.add('danger', 'secondary'); // Use secondary for less prominent delete
-                deleteButton.style.fontSize = '0.8em';
-                deleteButton.style.padding = '5px 8px';
+                deleteButton.classList.add('danger', 'secondary');
                 deleteButton.onclick = async (e) => {
-                    e.stopPropagation(); // Prevent li click event
+                    e.stopPropagation();
                     if (window.confirm(`Bạn có chắc muốn xóa sơ đồ "${map.title}" và tất cả các nút của nó?`)) {
                         await deleteMindMap(map.id);
                     }
                 };
                 li.appendChild(deleteButton);
-
                 li.addEventListener('click', () => {
                     showCanvasView(map.id, map.title);
                 });
-                if(mindmapListUl) mindmapListUl.appendChild(li);
+                if(normalMindmapListUl) normalMindmapListUl.appendChild(li);
             });
-            if(mindmapListLoading) hideElement(mindmapListLoading);
+            if(normalMindmapListLoading) hideElement(normalMindmapListLoading);
         }, (error) => {
-            console.error("Error fetching user mind maps: ", error);
-            if(mindmapListUl) mindmapListUl.innerHTML = '<li>Lỗi khi tải danh sách sơ đồ.</li>';
-            if(mindmapListLoading) hideElement(mindmapListLoading);
+            console.error("Error fetching normal mind maps: ", error);
+            if(normalMindmapListUl) normalMindmapListUl.innerHTML = '<li>Lỗi khi tải danh sách sơ đồ thường.</li>';
+            if(normalMindmapListLoading) hideElement(normalMindmapListLoading);
         });
+
+        // Query for AI-generated mind maps
+        const qAI = query(collection(db, "mindmaps"),
+                          where("userId", "==", currentUser.uid),
+                          where("type", "==", "ai"));
+        window.aiMindmapsListenerUnsubscribe = onSnapshot(qAI, (querySnapshot) => {
+            if(aiMindmapListUl) aiMindmapListUl.innerHTML = ''; // Clear list on each update
+            if (querySnapshot.empty) {
+                if(aiMindmapListUl) aiMindmapListUl.innerHTML = '<li>Bạn chưa có sơ đồ AI nào.</li>';
+            }
+            querySnapshot.forEach((docSnap) => {
+                const map = { id: docSnap.id, ...docSnap.data() };
+                const li = document.createElement('li');
+                li.textContent = map.title;
+                li.dataset.mapId = map.id;
+                li.dataset.mapTitle = map.title;
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Xóa';
+                deleteButton.classList.add('danger', 'secondary');
+                deleteButton.onclick = async (e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Bạn có chắc muốn xóa sơ đồ "${map.title}" và tất cả các nút của nó?`)) {
+                        await deleteMindMap(map.id);
+                    }
+                };
+                li.appendChild(deleteButton);
+                li.addEventListener('click', () => {
+                    showCanvasView(map.id, map.title);
+                });
+                if(aiMindmapListUl) aiMindmapListUl.appendChild(li);
+            });
+            if(aiMindmapListLoading) hideElement(aiMindmapListLoading);
+        }, (error) => {
+            console.error("Error fetching AI mind maps: ", error);
+            if(aiMindmapListUl) aiMindmapListUl.innerHTML = '<li>Lỗi khi tải danh sách sơ đồ AI.</li>';
+            if(aiMindmapListLoading) hideElement(aiMindmapListLoading);
+        });
+
     } catch (e) {
-        console.error("Error setting up mind map listener: ", e);
-        if(mindmapListUl) mindmapListUl.innerHTML = '<li>Lỗi khi tải danh sách sơ đồ.</li>';
-        if(mindmapListLoading) hideElement(mindmapListLoading);
+        console.error("Error setting up mind map listeners: ", e);
+        if(normalMindmapListUl) normalMindmapListUl.innerHTML = '<li>Lỗi khi tải danh sách sơ đồ.</li>';
+        if(aiMindmapListUl) aiMindmapListUl.innerHTML = '<li>Lỗi khi tải danh sách sơ đồ.</li>';
+        if(normalMindmapListLoading) hideElement(normalMindmapListLoading);
+        if(aiMindmapListLoading) hideElement(aiMindmapListLoading);
     }
 }
 async function deleteMindMap(mapId) {
@@ -850,11 +906,11 @@ function initKonvaStage() {
         let currentShape = hitShape;
         while (currentShape && currentShape !== currentKonvaStage) {
             if (currentShape.hasName && currentShape.hasName('mindmapNodeGroup')) {
-                targetNodeGroupForContextMenu = currentShape;
+                determinedTargetNodeGroup = currentShape;
                 break;
             }
             if (typeof currentShape.getParent !== 'function') { // Safety check
-                targetNodeGroupForContextMenu = null; break;
+                determinedTargetNodeGroup = null; break;
             }
             currentShape = currentShape.getParent();
         }
@@ -1912,7 +1968,6 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
         let userMessage = "Lỗi khi AI tạo kế hoạch hành động: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Nội dung của nút có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal(
@@ -1986,6 +2041,7 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
             title: mapTitle,
             createdAt: serverTimestamp(),
             lastModified: serverTimestamp(),
+            type: 'ai', // NEW: Add type for AI mind map
             canvasState: { scaleX: 1, scaleY: 1, x: 0, y: 0 }
         };
         const mindMapDocRef = await addDoc(collection(db, "mindmaps"), mindMapData);
@@ -2404,8 +2460,12 @@ window.addEventListener('DOMContentLoaded', () => {
     mindmapManagementView = document.getElementById('mindmap-management-view');
     newMindmapTitleInput = document.getElementById('new-mindmap-title-input');
     createMindmapButton = document.getElementById('create-mindmap-button');
-    mindmapListUl = document.getElementById('mindmap-list');
-    mindmapListLoading = document.getElementById('mindmap-list-loading');
+    normalMindmapListUl = document.getElementById('normal-mindmap-list'); // Renamed
+    normalMindmapListLoading = document.getElementById('normal-mindmap-list-loading'); // Renamed
+
+    // NEW: Assign AI mindmap list elements
+    aiMindmapListUl = document.getElementById('ai-mindmap-list');
+    aiMindmapListLoading = document.getElementById('ai-mindmap-list-loading');
 
 
     canvasView = document.getElementById('canvas-view');
