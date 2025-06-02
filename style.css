@@ -237,6 +237,19 @@ header h1 { color: #1c1e21; font-size: 18px; margin: 0; }
     flex-shrink: 0; /* Prevent button from shrinking */
 }
 
+/* Specific styles for the "readable-content" div inside modals */
+.modal-body .readable-content p {
+    font-size: 1em; /* Ensure paragraph text is readable */
+    line-height: 1.6; /* Good line height for readability */
+    margin-bottom: 1em; /* Space between paragraphs */
+    text-align: justify; /* Justify text for a cleaner look */
+    color: #333; /* Darker text for better contrast */
+}
+.modal-body .readable-content p:last-child {
+    margin-bottom: 0; /* No bottom margin for the last paragraph */
+}
+
+
 #canvas-view { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
 #canvas-toolbar { display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; padding: 6px 5px; margin-bottom: 5px; border-bottom: 1px solid #ccd0d5; flex-shrink: 0; background-color: #fff; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 #canvas-toolbar .toolbar-section { display: flex; align-items: center; margin-right: 15px; margin-bottom: 5px; margin-top: 5px; } /* Added margin-top for vertical spacing when wrapping */
