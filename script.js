@@ -901,7 +901,8 @@ function initKonvaStage() {
         }
 
         let hitShape = e_context.target;
-        let targetNodeGroupForContextMenu = null;
+        let determinedTargetNodeGroup = null; // FIX: Declare determinedTargetNodeGroup with let
+
         // Traverse up to find the 'mindmapNodeGroup'
         let currentShape = hitShape;
         while (currentShape && currentShape !== currentKonvaStage) {
@@ -915,8 +916,8 @@ function initKonvaStage() {
             currentShape = currentShape.getParent();
         }
 
-        if (targetNodeGroupForContextMenu) { // A mindmap node was right-clicked
-            rightClickedKonvaNode = targetNodeGroupForContextMenu;
+        if (determinedTargetNodeGroup) { // A mindmap node was right-clicked
+            rightClickedKonvaNode = determinedTargetNodeGroup; // FIX: Use determinedTargetNodeGroup
             // Select the node if not already selected
             if (!selectedKonvaNode || selectedKonvaNode.id() !== rightClickedKonvaNode.id()) {
                 if (selectedKonvaNode) { selectedKonvaNode.findOne('.nodeShape')?.strokeWidth(1); removeCreationHandle(selectedKonvaNode); }
@@ -1967,7 +1968,6 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
         let userMessage = "Lỗi khi AI tạo kế hoạch hành động: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Nội dung của nút có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal(
@@ -2204,7 +2204,6 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
         let userMessage = "Lỗi khi AI tạo sơ đồ từ văn bản: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Văn bản đầu vào có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal("Lỗi AI Tạo Sơ đồ", textContent, userMessage);
