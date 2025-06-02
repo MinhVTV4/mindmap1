@@ -1565,35 +1565,43 @@ async function handleSaveNodeTextFromModal() {
     }
 }
 
+/**
+ * Collects the text content of a node and its ancestors up to the root,
+ * forming a contextual path.
+ * @param {string} nodeId The ID of the starting node.
+ * @param {Array<Object>} allNodes The array of all node data in the current mind map.
+ * @returns {string} A string representing the contextual path (e.g., "Root Idea > Parent Node > Current Node").
+ */
+function getNodeContextPath(nodeId, allNodes) {
+    let path = [];
+    let currentNode = allNodes.find(n => n.id === nodeId);
 
-// --- HÀM THU THẬP DỮ LIỆU NHÁNH ---
-function collectBranchDataRecursive(nodeId, allNodes, level, collectedTexts) {
-    const node = allNodes.find(n => n.id === nodeId);
-    if (!node) {
-        return; // Node not found, stop recursion for this path
-    }
-    const indent = '    '.repeat(level); // Use spaces for indentation
-    collectedTexts.push(indent + (node.text || "").trim()); // Add current node's text
+    // Keep track of visited nodes to prevent infinite loops in case of circular references (though Firestore data shouldn't have them)
+    const visitedNodeIds = new Set(); 
 
-    const children = allNodes.filter(n => n.parentId === nodeId); // Find direct children
-    for (const child of children) {
-        collectBranchDataRecursive(child.id, allNodes, level + 1, collectedTexts); // Recurse for each child
+    while (currentNode && !visitedNodeIds.has(currentNode.id)) {
+        visitedNodeIds.add(currentNode.id);
+        path.unshift(currentNode.text); // Add to the beginning to get "Ancestor > Parent > Current"
+        currentNode = allNodes.find(n => n.id === currentNode.parentId);
     }
+    return path.join(' > '); // Join with a separator
 }
 
 
 // --- AI LOGIC FUNCTIONS (Function definitions) ---
-async function suggestChildNodesWithAI(targetNodeKonva) { // Renamed parameter to targetNodeKonva
+async function suggestChildNodesWithAI(targetNodeKonva) {
     if (!generativeModel || !targetNodeKonva || !currentMindMapId || !currentUser || !db) {
         alert("Chức năng AI chưa sẵn sàng hoặc thiếu thông tin cần thiết.");
         hideContextMenu(); return;
     }
-    const parentNodeId = targetNodeKonva.id(); // Use targetNodeKonva consistently
+    const parentNodeId = targetNodeKonva.id();
     const parentNodeData = allNodesDataForCurrentMap.find(n => n.id === parentNodeId);
     if (!parentNodeData) { alert("Không tìm thấy dữ liệu nút cha."); hideContextMenu(); return; }
 
     const parentText = parentNodeData.text;
-    const prompt = `Cho một nút sơ đồ tư duy với nội dung là "${parentText}", hãy gợi ý 3 ý tưởng ngắn gọn (khoảng 2-5 từ mỗi ý tưởng) cho các nút con liên quan trực tiếp. Mỗi ý tưởng trên một dòng riêng biệt. Không sử dụng đánh số, gạch đầu dòng hay bất kỳ ký tự đặc biệt nào ở đầu dòng.`;
+    const contextPath = getNodeContextPath(parentNodeId, allNodesDataForCurrentMap); // Get context for parent node
+
+    const prompt = `Cho nút cha "${parentText}" trong ngữ cảnh "${contextPath}", hãy gợi ý 3 ý tưởng ngắn gọn (khoảng 2-5 từ mỗi ý tưởng) cho các nút con liên quan trực tiếp đến "${parentText}" và phù hợp với ngữ cảnh nhánh. Mỗi ý tưởng trên một dòng riêng biệt. Không sử dụng đánh số, gạch đầu dòng hay bất kỳ ký tự đặc biệt nào ở đầu dòng.`;
 
     showLoadingIndicator("AI đang tạo gợi ý...");
     hideContextMenu();
@@ -1605,9 +1613,9 @@ async function suggestChildNodesWithAI(targetNodeKonva) { // Renamed parameter t
 
         if (suggestions.length > 0) {
             const batch = writeBatch(db);
-            let startX = targetNodeKonva.x(); // Use targetNodeKonva consistently
-            let startY = targetNodeKonva.y(); // Use targetNodeKonva consistently
-            const parentShape = targetNodeKonva.findOne('.nodeShape'); // Use targetNodeKonva consistently
+            let startX = targetNodeKonva.x();
+            let startY = targetNodeKonva.y();
+            const parentShape = targetNodeKonva.findOne('.nodeShape');
             const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
             const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
 
@@ -1656,7 +1664,13 @@ async function expandNodeWithAI(targetNodeKonva) {
     if (!targetNodeData) { alert("Không tìm thấy dữ liệu cho nút đã chọn."); hideContextMenu(); return; }
 
     const currentText = targetNodeData.text;
-    const prompt = `Với ý tưởng chính là "${currentText}", hãy viết một đoạn văn bản chi tiết hơn (khoảng 3-5 câu) để giải thích, làm rõ hoặc mở rộng ý tưởng này. Giữ văn phong mạch lạc và tập trung vào chủ đề.`;
+    const contextPath = getNodeContextPath(targetNodeId, allNodesDataForCurrentMap); // Get context from ancestors
+
+    const prompt = `Bạn là một chuyên gia sơ đồ tư duy.
+Nút hiện tại trong sơ đồ tư duy có nội dung: "${currentText}"
+Nút này nằm trong ngữ cảnh của nhánh: "${contextPath}"
+
+Dựa trên ngữ cảnh này, hãy viết một đoạn văn bản chi tiết hơn (khoảng 3-5 câu) để giải thích, làm rõ hoặc mở rộng ý tưởng của nút hiện tại. Đảm bảo câu trả lời liên quan chặt chẽ đến ngữ cảnh của các nút cha và không chung chung.`;
 
     showLoadingIndicator("AI đang mở rộng ý tưởng...");
     hideContextMenu();
@@ -1680,7 +1694,6 @@ async function expandNodeWithAI(targetNodeKonva) {
         let userMessage = "Lỗi khi AI mở rộng ý tưởng: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         alert(userMessage);
@@ -1698,7 +1711,9 @@ async function generateExamplesWithAI(targetNodeKonva) {
     if (!targetNodeData) { alert("Không tìm thấy dữ liệu cho nút đã chọn."); hideContextMenu(); return; }
 
     const currentText = targetNodeData.text;
-    const prompt = `Cho chủ đề sau: "${currentText}", hãy tạo ra 2 hoặc 3 ví dụ cụ thể để minh họa cho chủ đề này. Mỗi ví dụ trên một dòng riêng biệt. Không dùng đánh số hay gạch đầu dòng. Các ví dụ nên ngắn gọn và dễ hiểu.`;
+    const contextPath = getNodeContextPath(targetNodeId, allNodesDataForCurrentMap); // Get context from ancestors
+
+    const prompt = `Cho chủ đề sau: "${currentText}", trong ngữ cảnh nhánh: "${contextPath}", hãy tạo ra 2 hoặc 3 ví dụ cụ thể để minh họa cho chủ đề này. Các ví dụ phải phù hợp với ngữ cảnh đã cho. Mỗi ví dụ trên một dòng riêng biệt. Không dùng đánh số hay gạch đầu dòng. Các ví dụ nên ngắn gọn và dễ hiểu.`;
 
     showLoadingIndicator("AI đang tạo ví dụ...");
     hideContextMenu();
@@ -1706,13 +1721,13 @@ async function generateExamplesWithAI(targetNodeKonva) {
         const result = await generativeModel.generateContent(prompt);
         const response = result.response;
         const examplesText = response.text().trim();
-        const examples = examplesText.split('\n').map(ex => ex.trim()).filter(ex => ex.length > 0 && ex.length < 150); // Filter and trim suggestions
+        const examples = examplesText.split('\n').map(s => s.trim()).filter(s => s.length > 0 && s.length < 150); // Filter and trim suggestions
 
         if (examples.length > 0) {
             const batch = writeBatch(db);
-            let startX = targetNodeKonva.x(); // Use targetNodeKonva consistently
-            let startY = targetNodeKonva.y(); // Use targetNodeKonva consistently
-            const parentShape = targetNodeKonva.findOne('.nodeShape'); // Use targetNodeKonva consistently
+            let startX = targetNodeKonva.x();
+            let startY = targetNodeKonva.y();
+            const parentShape = targetNodeKonva.findOne('.nodeShape');
             const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
             const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
 
@@ -1760,13 +1775,14 @@ async function askAIAboutNode(targetNodeKonva) {
     if (!targetNodeData) { alert("Không tìm thấy dữ liệu cho nút đã chọn."); hideContextMenu(); return; }
 
     const nodeTextContext = targetNodeData.text;
-    const userQuestion = window.prompt(`Hỏi AI về nội dung của nút: "${nodeTextContext}"\nNhập câu hỏi của bạn:`, "");
+    const contextPath = getNodeContextPath(targetNodeId, allNodesDataForCurrentMap); // Get context from ancestors
+    const userQuestion = window.prompt(`Hỏi AI về nội dung của nút: "${nodeTextContext}"\nNgữ cảnh: "${contextPath}"\n\nNhập câu hỏi của bạn:`, "");
 
     if (!userQuestion || userQuestion.trim() === "") {
         hideContextMenu(); return; // User cancelled or entered nothing
     }
 
-    const prompt = `Nội dung của một nút trong sơ đồ tư duy là: "${nodeTextContext}".\n\nNgười dùng có câu hỏi sau về nút này: "${userQuestion.trim()}"\n\nHãy trả lời câu hỏi đó một cách ngắn gọn và súc tích, tập trung vào ngữ cảnh được cung cấp từ nút.`;
+    const prompt = `Nội dung của một nút trong sơ đồ tư duy là: "${nodeTextContext}". Nút này nằm trong ngữ cảnh của nhánh: "${contextPath}".\n\nNgười dùng có câu hỏi sau về nút này: "${userQuestion.trim()}"\n\nHãy trả lời câu hỏi đó một cách ngắn gọn và súc tích, tập trung vào ngữ cảnh được cung cấp từ nút và nhánh của nó.`;
     showLoadingIndicator("AI đang trả lời câu hỏi...");
     hideContextMenu();
     try {
@@ -1785,7 +1801,6 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -1911,6 +1926,7 @@ async function generateActionPlanWithAI(targetNodeKonva) {
     }
 
     const nodeContent = targetNodeData.text.trim();
+    const contextPath = getNodeContextPath(targetNodeId, allNodesDataForCurrentMap); // Get context from ancestors
     const nodeContentPreview = nodeContent.substring(0, 30) + (nodeContent.length > 30 ? "..." : "");
 
     showLoadingIndicator("AI đang tạo kế hoạch hành động...");
@@ -1919,6 +1935,7 @@ async function generateActionPlanWithAI(targetNodeKonva) {
     const prompt = `Bạn là một trợ lý AI chuyên nghiệp trong việc lập kế hoạch và đề xuất chiến lược hành động.
 Dựa trên mục tiêu hoặc vấn đề được mô tả dưới đây:
 "${nodeContent}"
+Nút này nằm trong ngữ cảnh của nhánh: "${contextPath}"
 
 Hãy đề xuất một kế hoạch hành động sơ bộ, bao gồm từ 3 đến 5 bước cụ thể, rõ ràng và có tính khả thi cao để đạt được mục tiêu hoặc giải quyết vấn đề đã nêu. Mỗi bước nên:
 1. Bắt đầu bằng một động từ hành động mạnh mẽ (ví dụ: Phân tích, Xác định, Thiết kế, Xây dựng, Triển khai, Kiểm tra, Đánh giá, Tối ưu hóa).
@@ -1942,7 +1959,7 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
                 text: `🚀 Kế hoạch hành động:\n${actionPlanText}`,
                 position: {
                     x: targetNodeKonva.x() + parentWidth / 4 + 10,
-                    y: targetNodeKonva.y() + parentHeight + 35
+                    y: targetNodeKonva.y() + parentHeight + 35 // Similar positioning to summary node
                 },
                 style: {
                     ...DEFAULT_NODE_STYLE,
@@ -2209,7 +2226,6 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
         let userMessage = "Lỗi khi AI tạo sơ đồ từ văn bản: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Văn bản đầu vào có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal("Lỗi AI Tạo Sơ đồ", textContent, userMessage);
@@ -2270,14 +2286,17 @@ async function deleteNodeLogic(nodeToDelete) {
 
     if (window.confirm(`Bạn có chắc muốn xóa nút "${nodeTextPreview}" và TẤT CẢ các nút con của nó không? Hành động này không thể hoàn tác.`)) {
         try {
+            console.log(`Attempting to delete node: ${nodeId} (${nodeTextPreview})`); // Debug log
             const descendantIds = findAllDescendantNodeIds(nodeId, allNodesDataForCurrentMap);
             const allIdsToDelete = [nodeId, ...descendantIds];
+            console.log("All nodes to delete:", allIdsToDelete); // Debug log
 
             const batch = writeBatch(db);
             allIdsToDelete.forEach(id => {
                 batch.delete(doc(db, "nodes", id));
             });
             await batch.commit();
+            console.log("Nodes deleted successfully from Firestore."); // Debug log
 
             // Reset selection if the deleted node or one of its descendants was selected
             if (selectedKonvaNode && allIdsToDelete.includes(selectedKonvaNode.id())) {
