@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sơ đồ tư duy MVP - Firebase AI</title>
+    <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-root">
+        <section id="auth-section" class="container">
+            <div id="login-form" class="form-container">
+                <h3>Đăng nhập Sơ đồ tư duy</h3>
+                <p id="login-error" class="error-message hidden"></p>
+                <input type="email" id="login-email" placeholder="Email" required>
+                <input type="password" id="login-password" placeholder="Mật khẩu" required>
+                <button id="login-button">Đăng nhập</button>
+                <p class="auth-toggle">Chưa có tài khoản? <a href="#" id="show-register-link">Đăng ký ngay</a></p>
+            </div>
+            <div id="register-form" class="form-container hidden">
+                <h3>Đăng ký tài khoản</h3>
+                <p id="register-error" class="error-message hidden"></p>
+                <input type="email" id="register-email" placeholder="Email" required>
+                <input type="password" id="register-password" placeholder="Mật khẩu (ít nhất 6 ký tự)" required>
+                <button id="register-button">Đăng ký</button>
+                <p class="auth-toggle">Đã có tài khoản? <a href="#" id="show-login-link">Đăng nhập</a></p>
+            </div>
+        </section>
+
+        <section id="main-app-section" class="container hidden">
+            <header>
+                <h1 id="main-app-title">Bảng điều khiển</h1>
+                <div id="user-info">
+                    <span id="user-email-display"></span>
+                    <button id="logout-button" class="secondary">Đăng xuất</button>
+                </div>
+            </header>
+
+            <div id="mindmap-management-view">
+                <h2>Quản lý Sơ đồ tư duy</h2>
+                <div style="margin-bottom: 15px;">
+                    <input type="text" id="new-mindmap-title-input" placeholder="Nhập tiêu đề sơ đồ mới...">
+                    <button id="create-mindmap-button">Tạo Sơ đồ mới</button>
+                </div>
+
+                <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fcfcfc;">
+                    <h3>✨ Tạo Sơ đồ tư duy bằng AI từ Văn bản</h3>
+                    <textarea id="ai-text-input" placeholder="Dán văn bản của bạn vào đây (ví dụ: một bài viết, một khái niệm, một danh sách...). AI sẽ giúp bạn biến nó thành sơ đồ tư duy!"
+                              style="width: calc(100% - 22px); min-height: 120px; padding: 10px; margin-bottom: 15px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; box-sizing: border-box;"></textarea>
+                    <button id="generate-mindmap-from-text-button">Tạo Sơ đồ với AI</button>
+                    <input type="text" id="ai-mindmap-title-input" placeholder="Tiêu đề sơ đồ AI (tùy chọn)"
+                           style="width: calc(100% - 22px); padding: 10px; margin-top: 10px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div id="mindmap-list-container">
+                    <h3>Danh sách sơ đồ của bạn:</h3>
+                    <div id="mindmap-list-loading" class="loading-indicator hidden">Đang tải danh sách...</div>
+                    <ul id="mindmap-list"></ul>
+                </div>
+            </div>
+
+            <div id="canvas-view" class="hidden">
+                <div id="canvas-toolbar">
+                    <div class="toolbar-section">
+                        <button id="back-to-maps-list-button" class="secondary" title="Quay lại danh sách">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-left-short" viewBox="0 0 16 16">
+                                <path fill-rule="evenodd" d="M12 8a.5.5 0 0 1-.5.5H5.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L5.707 7.5H11.5a.5.5 0 0 1 .5.5z"/>
+                            </svg>
+                        </button>
+                        <h2 id="current-mindmap-title-display"></h2>
+                    </div>
+                    <div class="toolbar-section">
+                        <button id="add-child-node-button" title="Thêm nút con (Click)">Thêm Nút</button>
+                        <button id="delete-node-button" class="danger" title="Xóa nút đã chọn (Delete/Backspace)">Xóa Nút</button>
+                    </div>
+                    <div class="toolbar-section">
+                        <span style="font-size:0.9em; margin-right: 3px;">Zoom:</span>
+                        <button id="zoom-in-button" class="secondary" title="Phóng to">+</button>
+                        <button id="zoom-out-button" class="secondary" title="Thu nhỏ">-</button>
+                        <button id="reset-zoom-button" class="secondary" title="Reset zoom">Reset</button>
+                    </div>
+                    <div class="toolbar-section">
+                        <label for="toggle-grid" style="font-size:0.9em; margin-right: 5px;">Lưới:</label>
+                        <input type="checkbox" id="toggle-grid" title="Hiển thị/Ẩn lưới">
+                    </div>
+                    <div class="toolbar-section">
+                        <label for="toggle-snap-to-grid" style="font-size:0.9em; margin-right: 5px;">Hút lưới:</label>
+                        <input type="checkbox" id="toggle-snap-to-grid" title="Bật/Tắt hút vào lưới">
+                    </div>
+                    <div class="toolbar-section">
+                        <label for="grid-size-input" style="font-size:0.9em; margin-right: 3px;">Kích thước lưới:</label>
+                        <input type="number" id="grid-size-input" value="50" min="10" max="200" step="10" title="Kích thước ô lưới">
+                    </div>
+                    <div id="node-style-panel" class="toolbar-section hidden">
+                        <div class="style-group">
+                            <label for="node-shape-select">Hình dạng:</label>
+                            <select id="node-shape-select" title="Hình dạng nút">
+                                <option value="rectangle">Chữ nhật</option>
+                                <option value="ellipse">Elip</option>
+                                <option value="roundedRectangle">Bo góc</option>
+                            </select>
+                        </div>
+                         <div class="style-group">
+                            <label for="node-font-family-select">Font:</label>
+                            <select id="node-font-family-select" title="Font chữ nút">
+                                <option value="Arial">Arial</option>
+                                <option value="Verdana">Verdana</option>
+                                <option value="Tahoma">Tahoma</option>
+                                <option value="Times New Roman">Times New Roman</option>
+                                <option value="Georgia">Georgia</option>
+                                <option value="Courier New">Courier New</option>
+                            </select>
+                        </div>
+                        <div class="style-group">
+                            <label for="node-font-size-input">Cỡ:</label>
+                            <input type="number" id="node-font-size-input" min="8" max="72" title="Cỡ chữ nút">
+                        </div>
+                        <div class="style-group">
+                            <label for="node-icon-select">Icon:</label>
+                            <select id="node-icon-select" title="Biểu tượng nút">
+                                <option value="">Không có</option>
+                                <option value="⭐">⭐ Ngôi sao</option>
+                                <option value="💡">💡 Bóng đèn</option>
+                                <option value="✔️">✔️ Check</option>
+                                <option value="❗">❗ Chú ý</option>
+                                <option value="❓">❓ Hỏi</option>
+                            </select>
+                        </div>
+                        <div class="style-group">
+                            <label for="node-bg-color">Nền:</label>
+                            <input type="color" id="node-bg-color" title="Màu nền nút">
+                        </div>
+                        <div class="style-group">
+                            <label for="node-text-color">Chữ:</label>
+                            <input type="color" id="node-text-color" title="Màu chữ nút">
+                        </div>
+                        <div class="style-group">
+                             <label for="node-border-color">Viền:</label>
+                            <input type="color" id="node-border-color" title="Màu viền nút">
+                        </div>
+                        <div class="style-group">
+                            <label for="node-line-color">Màu đường:</label>
+                            <input type="color" id="node-line-color" title="Màu đường nối từ nút này">
+                        </div>
+                         <div class="style-group">
+                            <label for="node-line-dash-select">Kiểu đường:</label>
+                            <select id="node-line-dash-select" title="Kiểu đường nối từ nút này">
+                                <option value="solid">Liền</option>
+                                <option value="dashed">Đứt</option>
+                                <option value="dotted">Chấm</option>
+                            </select>
+                        </div>
+                        <div class="style-group">
+                            <label for="node-line-width">Dày:</label>
+                            <input type="number" id="node-line-width" min="1" max="10" title="Độ dày đường nối từ nút này">
+                        </div>
+                    </div>
+                </div>
+                <div id="konva-container-loading" class="loading-indicator hidden">Đang tải sơ đồ...</div>
+                <div id="konva-container"></div>
+            </div>
+        </section>
+
+        <div id="context-menu" class="hidden">
+            <ul>
+                <li id="ctx-add-child">Thêm nút con (Tab)</li>
+                <li id="ctx-edit-text">Sửa văn bản (Enter)</li>
+                <li id="ctx-view-full-content">📄 Xem toàn bộ nội dung</li>
+                <li id="ctx-suggest-children">✨ Gợi ý nút con (AI)</li>
+                <li id="ctx-expand-node">🔍 Mở rộng ý tưởng (AI)</li>
+                <li id="ctx-generate-examples">💡 AI Tạo Ví Dụ</li>
+                <li id="ctx-ask-ai-node">💬 Hỏi AI về nút này...</li>
+                <li id="ctx-summarize-branch">📄 AI Tóm tắt nhánh này</li>
+                <li id="ctx-generate-action-plan">🚀 AI Tạo Kế hoạch Hành động</li>
+                <li id="ctx-delete-node">Xóa nút & con (Delete)</li>
+            </ul>
+        </div>
+
+        <div id="ai-loading-indicator" class="hidden">Đang xử lý AI...</div>
+
+        <div id="ai-response-modal-overlay" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 id="ai-response-modal-title">Phản hồi từ AI</h4>
+                    <button id="ai-response-modal-close-button" class="modal-close-button">&times;</button>
+                </div>
+                <div class="modal-body" id="ai-response-modal-body"></div>
+            </div>
+        </div>
+
+        <div id="node-content-modal-overlay" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 id="node-content-modal-title">Nội dung đầy đủ của nút</h4>
+                    <button id="node-content-modal-close-button" class="modal-close-button">&times;</button>
+                </div>
+                <div class="modal-body" id="node-content-modal-body">
+                    </div>
+            </div>
+        </div>
+
+        <div id="edit-node-text-modal-overlay" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 id="edit-node-text-modal-title">Sửa nội dung nút</h4>
+                    <button id="edit-node-text-modal-close-button" class="modal-close-button">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <textarea id="edit-node-textarea" style="width: 100%; min-height: 150px; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; line-height: 1.5;" placeholder="Nhập nội dung cho nút..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button id="edit-node-text-modal-cancel-button" class="secondary">Hủy</button>
+                    <button id="edit-node-text-modal-save-button">Lưu thay đổi</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
