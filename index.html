@@ -39,35 +39,39 @@
 
             <div id="mindmap-management-view">
                 <h2>Quản lý Sơ đồ tư duy</h2>
-                <p>Chào mừng bạn đến với công cụ tạo sơ đồ tư duy thông minh! Bạn có thể tạo sơ đồ mới từ đầu hoặc sử dụng AI để biến văn bản thành sơ đồ một cách nhanh chóng.</p>
+                <p class="intro-text">Chào mừng bạn đến với công cụ tạo sơ đồ tư duy thông minh! Bạn có thể tạo sơ đồ mới từ đầu hoặc sử dụng AI để biến văn bản thành sơ đồ một cách nhanh chóng.</p>
 
-                <div class="management-section">
-                    <h3>➕ Tạo Sơ đồ tư duy mới</h3>
-                    <p>Bắt đầu một sơ đồ tư duy trống và xây dựng ý tưởng của bạn từ đầu.</p>
-                    <div style="margin-bottom: 15px;">
-                        <input type="text" id="new-mindmap-title-input" placeholder="Nhập tiêu đề sơ đồ mới...">
-                        <button id="create-mindmap-button">Tạo Sơ đồ mới</button>
+                <div id="dashboard-layout">
+                    <div class="dashboard-column">
+                        <div class="management-section">
+                            <h3>➕ Tạo Sơ đồ tư duy mới</h3>
+                            <p>Bắt đầu một sơ đồ tư duy trống và xây dựng ý tưởng của bạn từ đầu.</p>
+                            <div class="input-group">
+                                <input type="text" id="new-mindmap-title-input" placeholder="Nhập tiêu đề sơ đồ mới...">
+                                <button id="create-mindmap-button">Tạo Sơ đồ mới</button>
+                            </div>
+                        </div>
+
+                        <div class="management-section dashboard-list-section">
+                            <h3>📂 Sơ đồ của bạn</h3>
+                            <p>Nhấp vào một sơ đồ để mở và chỉnh sửa, hoặc nhấp vào nút "Xóa" để loại bỏ nó.</p>
+                            <div id="mindmap-list-container">
+                                <div id="mindmap-list-loading" class="loading-indicator hidden">Đang tải danh sách...</div>
+                                <ul id="mindmap-list"></ul>
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="management-section">
-                    <h3>✨ Tạo Sơ đồ tư duy bằng AI từ Văn bản</h3>
-                    <p>Dán bất kỳ văn bản nào (ghi chú, bài viết, danh sách...) vào đây và AI sẽ tự động chuyển đổi nó thành một sơ đồ tư duy có cấu trúc.</p>
-                    <div style="margin-bottom: 20px;">
-                        <textarea id="ai-text-input" placeholder="Dán văn bản của bạn vào đây..."
-                                  style="width: calc(100% - 22px); min-height: 120px; padding: 10px; margin-bottom: 15px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; box-sizing: border-box;"></textarea>
-                        <button id="generate-mindmap-from-text-button">Tạo Sơ đồ với AI</button>
-                        <input type="text" id="ai-mindmap-title-input" placeholder="Tiêu đề sơ đồ AI (tùy chọn)"
-                               style="width: calc(100% - 22px); padding: 10px; margin-top: 10px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
-                    </div>
-                </div>
-
-                <div class="management-section">
-                    <h3>📂 Danh sách sơ đồ của bạn</h3>
-                    <p>Nhấp vào một sơ đồ để mở và chỉnh sửa, hoặc nhấp vào nút "Xóa" để loại bỏ nó.</p>
-                    <div id="mindmap-list-container">
-                        <div id="mindmap-list-loading" class="loading-indicator hidden">Đang tải danh sách...</div>
-                        <ul id="mindmap-list"></ul>
+                    <div class="dashboard-column">
+                        <div class="management-section">
+                            <h3>✨ Tạo Sơ đồ tư duy bằng AI từ Văn bản</h3>
+                            <p>Dán bất kỳ văn bản nào (ghi chú, bài viết, danh sách...) vào đây và AI sẽ tự động chuyển đổi nó thành một sơ đồ tư duy có cấu trúc.</p>
+                            <div class="input-group">
+                                <textarea id="ai-text-input" placeholder="Dán văn bản của bạn vào đây..."></textarea>
+                                <input type="text" id="ai-mindmap-title-input" placeholder="Tiêu đề sơ đồ AI (tùy chọn)">
+                                <button id="generate-mindmap-from-text-button">Tạo Sơ đồ với AI</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -130,8 +134,7 @@
                         </div>
                         <div class="style-group">
                             <label for="node-icon-select">Icon:</label>
-                            <select id="node-icon-select" title="Biểu tượng nút">
-                                <option value="">Không có</option>
+                            <select><option value="">Không có</option>
                                 <option value="⭐">⭐ Ngôi sao</option>
                                 <option value="💡">💡 Bóng đèn</option>
                                 <option value="✔️">✔️ Check</option>
