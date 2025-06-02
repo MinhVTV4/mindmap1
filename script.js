@@ -1026,6 +1026,33 @@ function renderNodesAndLines(nodesData) {
         const estimatedLineHeight = style.fontSize * 1.2;
         const maxVisibleTextHeightInNode = estimatedLineHeight * MAX_DISPLAY_LINES_IN_NODE;
         const isTextTruncated = fullTextActualHeight > maxVisibleTextHeightInNode;
+        // NEW: Truncate text content directly for display
+        let displayText = fullText;
+        if (isTextTruncated) {
+            // A simple way to truncate text to fit max lines, may need more complex logic for perfect fit
+            const words = fullText.split(' ');
+            let currentLines = 0;
+            let truncatedWords = [];
+            let tempLineHeightCheck = new Konva.Text({
+                fontSize: style.fontSize, fontFamily: style.fontFamily, width: textRenderWidth
+            });
+
+            for (let k = 0; k < words.length; k++) {
+                const testText = truncatedWords.concat(words[k]).join(' ');
+                tempLineHeightCheck.text(testText);
+                if (tempLineHeightCheck.height() / estimatedLineHeight > MAX_DISPLAY_LINES_IN_NODE) {
+                    break; // Exceeded max lines
+                }
+                truncatedWords.push(words[k]);
+            }
+            displayText = truncatedWords.join(' ');
+            // Ensure we don't add "..." if the text is already short enough
+            if (displayText.length < fullText.length) {
+                displayText += '...';
+            }
+        }
+
+
         const textDisplayHeight = isTextTruncated ? maxVisibleTextHeightInNode : fullTextActualHeight;
 
         // Calculate shape height based on text, minHeight, and "Read more" indicator
@@ -1085,7 +1112,7 @@ function renderNodesAndLines(nodesData) {
 
         // Create text object for display (potentially truncated)
         const textToRender = new Konva.Text({
-            text: fullText, // Initially set to full text, clipping will handle display
+            text: displayText, // Use truncated text for display
             fontSize: style.fontSize, fontFamily: style.fontFamily, fill: style.textColor,
             width: textRenderWidth > 0 ? textRenderWidth : 0, // Ensure width is not negative
             height: textDisplayHeight, // Set to calculated display height
@@ -1098,23 +1125,10 @@ function renderNodesAndLines(nodesData) {
             name: 'nodeTextContent'
         });
 
-        // Apply clipping if text is truncated
-        if (isTextTruncated) {
-            if (typeof textToRender.clip === 'function') { // Check if clip method exists (Konva versions)
-                 textToRender.clip({
-                    x: 0, y: 0, // Clip relative to the text object's position
-                    width: textRenderWidth, height: textDisplayHeight
-                });
-            } else { // Fallback for older Konva or if .clip() is not a function
-                console.warn(`textToRender.clip is not a function for node ${nodeData.id}. Attempting to set clip as an attribute.`);
-                try {
-                    textToRender.setAttr('clip', { x: 0, y: 0, width: textRenderWidth, height: textDisplayHeight });
-                } catch (clipAttrError) {
-                    console.error("Failed to set clip as attribute:", clipAttrError);
-                }
-            }
+        // No need for textToRender.clip() anymore as text is pre-truncated
 
-            // Add "Read more" indicator
+        // Add "Read more" indicator if text was truncated
+        if (isTextTruncated) {
              const readMoreText = new Konva.Text({
                 x: style.padding + iconWidthForCalc, // Align with main text
                 y: style.padding + textDisplayHeight + style.padding * 0.2, // Position below truncated text
@@ -1506,12 +1520,12 @@ function collectBranchDataRecursive(nodeId, allNodes, level, collectedTexts) {
 
 
 // --- AI LOGIC FUNCTIONS (Function definitions) ---
-async function suggestChildNodesWithAI(parentNodeKonva) {
-    if (!generativeModel || !parentNodeKonva || !currentMindMapId || !currentUser || !db) {
+async function suggestChildNodesWithAI(targetNodeKonva) { // Renamed parameter to targetNodeKonva
+    if (!generativeModel || !targetNodeKonva || !currentMindMapId || !currentUser || !db) {
         alert("Chức năng AI chưa sẵn sàng hoặc thiếu thông tin cần thiết.");
         hideContextMenu(); return;
     }
-    const parentNodeId = parentNodeKonva.id();
+    const parentNodeId = targetNodeKonva.id(); // Use targetNodeKonva consistently
     const parentNodeData = allNodesDataForCurrentMap.find(n => n.id === parentNodeId);
     if (!parentNodeData) { alert("Không tìm thấy dữ liệu nút cha."); hideContextMenu(); return; }
 
@@ -1528,9 +1542,9 @@ async function suggestChildNodesWithAI(parentNodeKonva) {
 
         if (suggestions.length > 0) {
             const batch = writeBatch(db);
-            let startX = parentNodeKonva.x();
-            let startY = parentNodeKonva.y();
-            const parentShape = parentNodeKonva.findOne('.nodeShape');
+            let startX = targetNodeKonva.x(); // Use targetNodeKonva consistently
+            let startY = targetNodeKonva.y(); // Use targetNodeKonva consistently
+            const parentShape = targetNodeKonva.findOne('.nodeShape'); // Use targetNodeKonva consistently
             const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
             const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
 
@@ -1629,13 +1643,13 @@ async function generateExamplesWithAI(targetNodeKonva) {
         const result = await generativeModel.generateContent(prompt);
         const response = result.response;
         const examplesText = response.text().trim();
-        const examples = examplesText.split('\n').map(ex => ex.trim()).filter(ex => ex.length > 0 && ex.length < 150); // Filter and trim examples
+        const examples = examplesText.split('\n').map(ex => ex.trim()).filter(ex => ex.length > 0 && ex.length < 150); // Filter and trim suggestions
 
         if (examples.length > 0) {
             const batch = writeBatch(db);
-            let startX = parentNodeKonva.x();
-            let startY = parentNodeKonva.y();
-            const parentShape = parentNodeKonva.findOne('.nodeShape');
+            let startX = targetNodeKonva.x(); // Use targetNodeKonva consistently
+            let startY = targetNodeKonva.y(); // Use targetNodeKonva consistently
+            const parentShape = targetNodeKonva.findOne('.nodeShape'); // Use targetNodeKonva consistently
             const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
             const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
 
@@ -1773,7 +1787,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
 
         if (summaryText) {
             // Create a new node as a child of the summarized node to display the summary
-            const parentShape = parentNodeKonva.findOne('.nodeShape');
+            const parentShape = targetNodeKonva.findOne('.nodeShape');
             const parentHeight = parentShape ? parentShape.height() : DEFAULT_NODE_STYLE.minHeight;
             const parentWidth = parentShape ? parentShape.width() : DEFAULT_NODE_STYLE.width;
 
@@ -1783,8 +1797,8 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
                 parentId: rootNodeId, // Child of the node that was summarized
                 text: `📄 Tóm tắt nhánh:\n${summaryText}`,
                 position: {
-                    x: parentNodeKonva.x() + parentWidth / 4 + 10, // Position it near the parent
-                    y: parentNodeKonva.y() + parentHeight + 35
+                    x: targetNodeKonva.x() + parentWidth / 4 + 10, // Position it near the parent
+                    y: targetNodeKonva.y() + parentHeight + 35
                 },
                 style: {
                     ...DEFAULT_NODE_STYLE,
@@ -1817,7 +1831,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
         else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
-        else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Nội dung nhánh có thể chứa từ khóa nhạy cảm.";}
+        else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
     } finally {
         hideLoadingIndicator();
@@ -1857,7 +1871,7 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
         const actionPlanText = response.text().trim();
 
         if (actionPlanText) {
-            const parentShape = parentNodeKonva.findOne('.nodeShape');
+            const parentShape = targetNodeKonva.findOne('.nodeShape');
             const parentHeight = parentShape ? parentShape.height() : DEFAULT_NODE_STYLE.minHeight;
             const parentWidth = parentShape ? parentShape.width() : DEFAULT_NODE_STYLE.width;
 
@@ -1866,8 +1880,8 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
                 parentId: targetNodeId, // Child of the node the plan is for
                 text: `🚀 Kế hoạch hành động:\n${actionPlanText}`,
                 position: {
-                    x: parentNodeKonva.x() + parentWidth / 4 + 10,
-                    y: parentNodeKonva.y() + parentHeight + 35 // Similar positioning to summary node
+                    x: targetNodeKonva.x() + parentWidth / 4 + 10,
+                    y: targetNodeKonva.y() + parentHeight + 35 // Similar positioning to summary node
                 },
                 style: {
                     ...DEFAULT_NODE_STYLE,
