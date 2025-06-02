@@ -1,5 +1,5 @@
 html, body {
-    font-family: -apple-system, BlinkMacMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
     padding: 0;
     background-color: #f0f2f5;
@@ -111,19 +111,51 @@ header {
 }
 header h1 { color: #1c1e21; font-size: 18px; margin: 0; }
 #user-info span { margin-right: 8px; font-size: 0.85em; }
+
+/* Dashboard Layout */
 #mindmap-management-view {
     display: flex;
     flex-direction: column;
     flex-grow: 1; /* Allow this view to grow and take available space */
-    overflow-y: auto; /* Enable scrolling for the entire management view if content overflows */
+    padding: 10px; /* Add some padding to the overall management view */
+    overflow-y: auto; /* Enable scrolling for the entire management view */
 }
-/* Styling for management sections */
-.management-section {
+
+.intro-text {
+    font-size: 0.95em;
+    color: #4b4f56;
     margin-bottom: 20px;
+    text-align: center;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#dashboard-layout {
+    display: flex;
+    flex-direction: row; /* Two columns side-by-side */
+    gap: 20px; /* Space between columns */
+    flex-grow: 1; /* Allow dashboard layout to grow */
+    min-height: 0; /* Important for flex items with overflow */
+    flex-wrap: wrap; /* Allow columns to wrap on smaller screens */
+}
+
+.dashboard-column {
+    flex: 1; /* Each column takes equal available space */
+    display: flex;
+    flex-direction: column; /* Content inside column stacks vertically */
+    min-width: 300px; /* Minimum width for columns before wrapping */
+    box-sizing: border-box;
+}
+
+/* Styling for individual management sections within columns */
+.management-section {
+    margin-bottom: 20px; /* Space between sections within a column */
     padding: 15px;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
     background-color: #fcfcfc;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Subtle shadow */
     flex-shrink: 0; /* Prevent sections from shrinking if content is large */
 }
 .management-section h3 {
@@ -131,24 +163,78 @@ header h1 { color: #1c1e21; font-size: 18px; margin: 0; }
     color: #1877f2;
     font-size: 1.1em;
     margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
 }
 .management-section p {
     font-size: 0.9em;
     color: #555;
     margin-bottom: 15px;
 }
-/* END NEW */
+.management-section .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.management-section .input-group input[type="text"],
+.management-section .input-group textarea {
+    width: auto; /* Override calc(100% - 22px) for flex context */
+    flex-grow: 1;
+    margin-bottom: 0; /* Reset margin from global input rule */
+}
+.management-section .input-group button {
+    width: fit-content; /* Button fits its content */
+    align-self: flex-end; /* Align button to the right */
+    margin-right: 0;
+}
+
+
+/* Specific styling for the mindmap list section */
+.dashboard-list-section {
+    flex-grow: 1; /* Allow the list section to take all remaining vertical space in its column */
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Crucial for flex items with overflow */
+}
+
 #mindmap-list-container{
     flex-grow: 1; /* Allow list container to grow and take remaining space */
     overflow-y: auto; /* Enable scrolling specifically for the list */
     min-height: 0; /* Important for flex items with overflow */
+    border: 1px solid #dddfe2; /* Add border for visual separation */
+    border-radius: 6px;
+    background-color: #fff;
+    padding: 5px;
 }
-#mindmap-list { list-style: none; padding: 0; }
-#mindmap-list li { padding: 8px; border: 1px solid #dddfe2; margin-bottom: 4px; cursor: pointer; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; transition: background-color 0.2s; }
-#mindmap-list li:hover { background-color: #f0f2f5; }
+#mindmap-list { list-style: none; padding: 0; margin: 0; } /* Reset default list margins/padding */
+#mindmap-list li {
+    padding: 10px; /* Increased padding for better touch targets */
+    border: 1px solid #eee;
+    margin-bottom: 5px; /* Space between list items */
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s, box-shadow 0.2s;
+    font-size: 0.95em;
+    color: #333;
+    background-color: #f8f8f8;
+}
+#mindmap-list li:hover {
+    background-color: #e9e9e9;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+#mindmap-list li button.danger.secondary {
+    font-size: 0.75em; /* Slightly smaller delete button */
+    padding: 4px 7px;
+    margin-left: 10px;
+    flex-shrink: 0; /* Prevent button from shrinking */
+}
+
 #canvas-view { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
-#canvas-toolbar { display: flex; align-items: center; flex-wrap: wrap; padding: 6px 5px; margin-bottom: 5px; border-bottom: 1px solid #ccd0d5; flex-shrink: 0; }
-#canvas-toolbar .toolbar-section { display: flex; align-items: center; margin-right: 15px; margin-bottom: 5px; }
+#canvas-toolbar { display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; padding: 6px 5px; margin-bottom: 5px; border-bottom: 1px solid #ccd0d5; flex-shrink: 0; background-color: #fff; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+#canvas-toolbar .toolbar-section { display: flex; align-items: center; margin-right: 15px; margin-bottom: 5px; margin-top: 5px; } /* Added margin-top for vertical spacing when wrapping */
 #canvas-toolbar .toolbar-section:last-child { margin-right: 0; }
 #canvas-toolbar h2 { margin: 0 10px 0 0; font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 #back-to-maps-list-button { padding: 6px 8px; font-size: 18px; line-height: 1; }
