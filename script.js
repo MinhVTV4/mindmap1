@@ -95,7 +95,7 @@ let gridLines = []; // To store Konva Line objects for the grid
 
 // --- DOM ELEMENT VARIABLES ---
 let nodeStylePanel, nodeShapeSelect, nodeFontFamilySelect, nodeFontSizeInput, nodeIconSelect, nodeBgColorInput, nodeTextColorInput, nodeBorderColorInput, nodeLineColorInput, nodeLineDashSelect, nodeLineWidthInput;
-let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton, ctxGenerateOutlineButton, ctxOptimizeLayoutButton; // NEW: ctxOptimizeLayoutButton
+let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton, ctxGenerateOutlineButton; // NEW: ctxGenerateOutlineButton
 let aiLoadingIndicator, aiResponseModalOverlay, aiResponseModalTitle, aiResponseModalBody, aiResponseModalCloseButton;
 let nodeContentModalOverlay, nodeContentModalTitle, nodeContentModalBody, nodeContentModalCloseButton;
 let editNodeTextModalOverlay, editNodeTextModalTitle, editNodeTextarea, editNodeTextModalSaveButton, editNodeTextModalCancelButton, editNodeTextModalCloseButton; // NEW modal elements
@@ -1329,7 +1329,7 @@ function renderNodesAndLines(nodesData) {
 
             // Hide context menu if a primary click occurs outside of it
             if (isPrimaryInteraction && contextMenu && !contextMenu.classList.contains('hidden')) {
-                if (!contextMenu.contains(e.target)) { // If click is outside context menu
+                if (!contextMenu.contains(e.evt.target)) { // If click is outside context menu
                      hideContextMenu();
                 }
             }
@@ -1690,7 +1690,7 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
             });
             await batch.commit();
         } else {
-            alert("AI không thể đưa ra gợi ý nào phù intimidating vào lúc này.");
+            alert("AI không thể đưa ra gợi ý nào phù hợp vào lúc này.");
         }
     } catch (error) {
         console.error("Error calling Gemini API (suggestChildNodesWithAI):", error);
@@ -2149,163 +2149,6 @@ Hãy cung cấp dàn ý của bạn:`;
     }
 }
 
-// NEW: AI-driven Layout Optimization
-async function optimizeLayoutWithAI(targetNodeId = null) {
-    console.log("Attempting to optimize layout with AI. Target Node ID:", targetNodeId); // Debug log
-    if (!currentKonvaStage || !currentKonvaLayer || !currentMindMapId || !db || !currentUser) {
-        alert("Không thể tối ưu hóa bố cục. Canvas hoặc cơ sở dữ liệu chưa sẵn sàng.");
-        return;
-    }
-
-    showLoadingIndicator("AI đang tối ưu hóa bố cục sơ đồ...");
-
-    let nodesToOptimize = [];
-    let rootNodeForLayout = null;
-
-    if (targetNodeId) {
-        // Optimize a specific branch
-        rootNodeForLayout = allNodesDataForCurrentMap.find(n => n.id === targetNodeId);
-        if (!rootNodeForLayout) {
-            alert("Không tìm thấy nút để tối ưu hóa bố cục.");
-            hideLoadingIndicator();
-            return;
-        }
-        // Collect all nodes in the branch
-        const branchNodeIds = [rootNodeId].concat(findAllDescendantNodeIds(rootNodeId, allNodesDataForCurrentMap));
-        nodesToOptimize = allNodesDataForCurrentMap.filter(n => branchNodeIds.includes(n.id));
-        console.log("Optimizing branch nodes:", nodesToOptimize.map(n => n.text));
-    } else {
-        // Optimize the entire map
-        nodesToOptimize = [...allNodesDataForCurrentMap];
-        // Find a suitable root if optimizing entire map without a specified target
-        rootNodeForLayout = allNodesDataForCurrentMap.find(n => n.parentId === null) || nodesToOptimize[0];
-        if (!rootNodeForLayout && nodesToOptimize.length > 0) {
-            rootNodeForLayout = nodesToOptimize[0]; // Fallback to first node if no explicit root
-        }
-        console.log("Optimizing entire map. Root node:", rootNodeForLayout?.text);
-    }
-
-    if (nodesToOptimize.length === 0) {
-        alert("Không có nút nào để tối ưu hóa bố cục.");
-        hideLoadingIndicator();
-        return;
-    }
-
-    // Prepare data for layout algorithm: convert to a simpler graph structure
-    const graphNodes = nodesToOptimize.map(node => ({
-        id: node.id,
-        text: node.text,
-        parentId: node.parentId,
-        level: node.level, // Use existing level or calculate if needed
-        width: node.style?.width || DEFAULT_NODE_STYLE.width,
-        height: node.style?.minHeight || DEFAULT_NODE_STYLE.minHeight, // Use minHeight for layout calc
-    }));
-
-    // Simple hierarchical layout algorithm (for demonstration)
-    // This is a basic implementation and can be replaced with more sophisticated algorithms
-    const layoutAlgorithm = (nodes, rootId, initialX, initialY, horizontalSpacing, verticalSpacing) => {
-        const positions = {};
-        const childrenMap = new Map();
-        nodes.forEach(node => {
-            if (node.parentId) {
-                if (!childrenMap.has(node.parentId)) {
-                    childrenMap.set(node.parentId, []);
-                }
-                childrenMap.get(node.parentId).push(node);
-            }
-        });
-
-        // Sort children for consistent layout
-        childrenMap.forEach(children => {
-            children.sort((a, b) => a.text.localeCompare(b.text));
-        });
-
-        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0 }];
-        const visited = new Set();
-        let currentLevelY = { 0: initialY }; // Tracks Y position for each level
-        let currentLevelMaxX = { 0: initialX + (nodes.find(n => n.id === rootId)?.width || DEFAULT_NODE_STYLE.width) / 2 }; // Tracks max X for each level
-
-        while (queue.length > 0) {
-            const current = queue.shift();
-            if (visited.has(current.id)) continue;
-            visited.add(current.id);
-
-            positions[current.id] = { x: current.x, y: current.y };
-
-            const directChildren = childrenMap.get(current.id) || [];
-            let childStartX = current.x - (directChildren.length - 1) * (horizontalSpacing + DEFAULT_NODE_STYLE.width) / 2; // Center children under parent
-
-            directChildren.forEach((child, index) => {
-                const childLevel = current.level + 1;
-                const childY = (currentLevelY[childLevel] || (current.y + (nodes.find(n => n.id === current.id)?.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing));
-                
-                let childX = childStartX + index * (DEFAULT_NODE_STYLE.width + horizontalSpacing);
-
-                // Adjust X to avoid overlap with previous nodes on the same level
-                if (currentLevelMaxX[childLevel] && childX < currentLevelMaxX[childLevel] + horizontalSpacing) {
-                    childX = currentLevelMaxX[childLevel] + horizontalSpacing;
-                }
-
-                queue.push({ id: child.id, x: childX, y: childY, level: childLevel });
-                currentLevelY[childLevel] = childY;
-                currentLevelMaxX[childLevel] = childX + DEFAULT_NODE_STYLE.width;
-            });
-        }
-        return positions;
-    };
-
-    // Find the actual root node for the layout
-    let layoutRootId = rootNodeForLayout.id;
-    if (!layoutRootId && nodesToOptimize.length > 0) {
-        // If no explicit root found, find the highest-level node without a parent in the selection
-        const potentialRoots = nodesToOptimize.filter(n => !nodesToOptimize.some(p => p.id === n.parentId));
-        if (potentialRoots.length > 0) {
-            layoutRootId = potentialRoots[0].id; // Just pick the first one
-        } else {
-            layoutRootId = nodesToOptimize[0].id; // Fallback to first node if no clear root
-        }
-    }
-    
-    if (!layoutRootId) {
-        alert("Không tìm thấy node gốc để tối ưu hóa bố cục.");
-        hideLoadingIndicator();
-        return;
-    }
-
-
-    const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
-    const initialY = 50;
-    const horizontalSpacing = 80;
-    const verticalSpacing = 60;
-
-    const newPositions = layoutAlgorithm(graphNodes, layoutRootId, initialX, initialY, horizontalSpacing, verticalSpacing);
-
-    // Apply updates to Firestore in a batch
-    const batch = writeBatch(db);
-    let updatesCount = 0;
-    nodesToOptimize.forEach(node => {
-        const newPos = newPositions[node.id];
-        if (newPos && (node.position.x !== newPos.x || node.position.y !== newPos.y)) {
-            batch.update(doc(db, "nodes", node.id), { position: newPos });
-            updatesCount++;
-        }
-    });
-
-    try {
-        if (updatesCount > 0) {
-            await batch.commit();
-            alert(`AI đã tối ưu hóa bố cục cho ${updatesCount} nút.`);
-        } else {
-            alert("Không có thay đổi bố cục đáng kể nào được AI đề xuất.");
-        }
-    } catch (error) {
-        console.error("Error optimizing layout:", error);
-        alert("Lỗi khi tối ưu hóa bố cục: " + error.message);
-    } finally {
-        hideLoadingIndicator();
-    }
-}
-
 
 async function handleGenerateMindmapFromText() {
     if (!generativeModel || !db || !currentUser) {
@@ -2418,32 +2261,16 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
                 const verticalOffset = 70;   // Base vertical offset from parent
 
                 // Simple fan-out: alternate left/right for direct children (level 1)
-                // For deeper levels, just offset from parent.
-                if (node.level === 1) {
-                     // Position children of level 0 nodes in a fan-out
-                    const siblings = nodesToCreate.filter(n => n.parentId === node.parentId);
-                    const siblingIndex = siblings.findIndex(s => s.tempId === node.tempId);
+                // For deeper levels, just place below and slightly right of parent
+                actualX = parentNodeInfo.x + 50;
+                actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight + 60;
 
-                    const angleStep = (Math.PI * 0.8) / Math.max(1, siblings.length - 1); // Spread over 180 degrees
-                    const baseAngle = -Math.PI * 0.4; // Start slightly left of vertical
-                    const currentAngle = baseAngle + (siblingIndex * angleStep);
-
-                    const radius = 200; // Distance from parent
-                    actualX = parentNodeInfo.x + parentNodeInfo.style.width / 2 + radius * Math.cos(currentAngle) - nodeStyleBase.width / 2;
-                    actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight / 2 + radius * Math.sin(currentAngle) - nodeStyleBase.minHeight / 2;
-
-                } else {
-                    // For deeper levels, just place below and slightly right of parent
-                    actualX = parentNodeInfo.x + 50;
-                    actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight + 60;
-
-                    // To avoid direct overlap, check last node at this level
-                    if (lastNodePosPerLevel[node.level]) {
-                        const lastNodeInfo = lastNodePosPerLevel[node.level];
-                        // If new node would overlap horizontally, move it to the right
-                        if (actualX < lastNodeInfo.x + lastNodeInfo.width + 20 && actualY < lastNodeInfo.y + lastNodeInfo.height + 20) {
-                            actualX = lastNodeInfo.x + lastNodeInfo.width + 50;
-                        }
+                // To avoid direct overlap, check last node at this level
+                if (lastNodePosPerLevel[node.level]) {
+                    const lastNodeInfo = lastNodePosPerLevel[node.level];
+                    // If new node would overlap horizontally, move it to the right
+                    if (actualX < lastNodeInfo.x + lastNodeInfo.width + 20 && actualY < lastNodeInfo.y + lastNodeInfo.height + 20) {
+                        actualX = lastNodeInfo.x + lastNodeInfo.width + 50;
                     }
                 }
 
@@ -2743,8 +2570,7 @@ window.addEventListener('DOMContentLoaded', () => {
     ctxAskAiNodeButton = document.getElementById('ctx-ask-ai-node');
     ctxSummarizeBranchButton = document.getElementById('ctx-summarize-branch');
     ctxGenerateActionPlanButton = document.getElementById('ctx-generate-action-plan');
-    ctxGenerateOutlineButton = document.getElementById('ctx-generate-outline');
-    ctxOptimizeLayoutButton = document.getElementById('ctx-optimize-layout'); // Assign new button
+    ctxGenerateOutlineButton = document.getElementById('ctx-generate-outline'); // NEW: Assign outline button
     ctxDeleteNodeButton = document.getElementById('ctx-delete-node');
 
     aiLoadingIndicator = document.getElementById('ai-loading-indicator');
@@ -2758,6 +2584,7 @@ window.addEventListener('DOMContentLoaded', () => {
     nodeContentModalBody = document.getElementById('node-content-modal-body');
     nodeContentModalCloseButton = document.getElementById('node-content-modal-close-button');
 
+    // NEW: Assign Edit Node Text Modal elements
     editNodeTextModalOverlay = document.getElementById('edit-node-text-modal-overlay');
     editNodeTextModalTitle = document.getElementById('edit-node-text-modal-title');
     editNodeTextarea = document.getElementById('edit-node-textarea');
@@ -2790,9 +2617,11 @@ window.addEventListener('DOMContentLoaded', () => {
     mindmapManagementView = document.getElementById('mindmap-management-view');
     newMindmapTitleInput = document.getElementById('new-mindmap-title-input');
     createMindmapButton = document.getElementById('create-mindmap-button');
+    // FIX: Corrected DOM element assignment for normal mind map list
     normalMindmapListUl = document.getElementById('normal-mindmap-list');
     normalMindmapListLoading = document.getElementById('normal-mindmap-list-loading');
 
+    // FIX: Corrected DOM element assignment for AI mind map list
     aiMindmapListUl = document.getElementById('ai-mindmap-list');
     aiMindmapListLoading = document.getElementById('ai-mindmap-list-loading');
 
@@ -2808,10 +2637,12 @@ window.addEventListener('DOMContentLoaded', () => {
     konvaContainer = document.getElementById('konva-container');
     konvaContainerLoading = document.getElementById('konva-container-loading');
 
+    // NEW: Assign AI from Text elements
     aiTextInput = document.getElementById('ai-text-input');
     generateMindmapFromTextButton = document.getElementById('generate-mindmap-from-text-button');
     aiMindmapTitleInput = document.getElementById('ai-mindmap-title-input');
 
+    // NEW: Assign grid control elements
     toggleGridCheckbox = document.getElementById('toggle-grid');
     toggleSnapToGridCheckbox = document.getElementById('toggle-snap-to-grid');
     gridSizeInput = document.getElementById('grid-size-input');
@@ -2823,18 +2654,20 @@ window.addEventListener('DOMContentLoaded', () => {
     if (nodeContentModalCloseButton) { nodeContentModalCloseButton.addEventListener('click', closeNodeContentModal); }
     if (nodeContentModalOverlay) { nodeContentModalOverlay.addEventListener('click', function(event) { if (event.target === nodeContentModalOverlay) closeNodeContentModal(); });}
 
+    // NEW: Event listeners for Edit Node Text Modal
     if (editNodeTextModalSaveButton) { editNodeTextModalSaveButton.addEventListener('click', handleSaveNodeTextFromModal); }
     if (editNodeTextModalCancelButton) { editNodeTextModalCancelButton.addEventListener('click', closeEditNodeModal); }
     if (editNodeTextModalCloseButton) { editNodeTextModalCloseButton.addEventListener('click', closeEditNodeModal); }
-    if (editNodeTextarea) {
+    if (editNodeTextarea) { // Allow Ctrl+Enter to save, Enter for new line
         editNodeTextarea.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && e.ctrlKey) {
+            if (e.key === 'Enter' && e.ctrlKey) { // Ctrl+Enter to save
                 e.preventDefault();
                 handleSaveNodeTextFromModal();
-            } else if (e.key === 'Escape') {
+            } else if (e.key === 'Escape') { // Allow Esc from textarea to close modal
                 e.preventDefault();
                 closeEditNodeModal();
             }
+            // Default Enter behavior (new line) is allowed if Ctrl is not pressed
         });
     }
 
@@ -2849,9 +2682,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (backToMapsListButton) { backToMapsListButton.addEventListener('click', showMindmapManagementView); }
 
+    // Node Style Panel Listeners
     if (nodeShapeSelect) nodeShapeSelect.addEventListener('change', (e) => handleNodeStyleChange('shape', e.target.value));
     if (nodeFontFamilySelect) nodeFontFamilySelect.addEventListener('change', (e) => handleNodeStyleChange('fontFamily', e.target.value));
-    if (nodeFontSizeInput) nodeFontSizeInput.addEventListener('input', (e) => handleNodeStyleChange('fontSize', e.target.value));
+    if (nodeFontSizeInput) nodeFontSizeInput.addEventListener('input', (e) => handleNodeStyleChange('fontSize', e.target.value)); // Use input for live changes
     if (nodeIconSelect) nodeIconSelect.addEventListener('change', (e) => handleNodeStyleChange('icon', e.target.value));
     if (nodeBgColorInput) nodeBgColorInput.addEventListener('input', (e) => handleNodeStyleChange('backgroundColor', e.target.value));
     if (nodeTextColorInput) nodeTextColorInput.addEventListener('input', (e) => handleNodeStyleChange('textColor', e.target.value));
@@ -2863,29 +2697,31 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (createMindmapButton) { createMindmapButton.addEventListener('click', handleCreateMindmap); }
 
+    // NEW: AI Generate Mindmap from Text Listener
     if (generateMindmapFromTextButton) {
         generateMindmapFromTextButton.addEventListener('click', handleGenerateMindmapFromText);
     }
 
+    // NEW: Grid and Snap-to-Grid Listeners
     if (toggleGridCheckbox) {
         toggleGridCheckbox.addEventListener('change', (e) => {
             isGridVisible = e.target.checked;
             updateGrid();
-            saveCanvasState();
+            saveCanvasState(); // Save grid visibility state
         });
     }
     if (toggleSnapToGridCheckbox) {
         toggleSnapToGridCheckbox.addEventListener('change', (e) => {
             isSnapToGridEnabled = e.target.checked;
-            saveCanvasState();
+            saveCanvasState(); // Save snap-to-grid state
         });
     }
     if (gridSizeInput) {
         gridSizeInput.addEventListener('input', (e) => {
             gridSize = parseInt(e.target.value, 10);
-            if (isNaN(gridSize) || gridSize < 10) gridSize = 10;
-            if (isGridVisible) updateGrid();
-            saveCanvasState();
+            if (isNaN(gridSize) || gridSize < 10) gridSize = 10; // Minimum grid size
+            if (isGridVisible) updateGrid(); // Redraw grid if visible
+            saveCanvasState(); // Save grid size
         });
     }
 
@@ -2906,7 +2742,7 @@ window.addEventListener('DOMContentLoaded', () => {
         ctxEditTextButton.addEventListener('click', () => {
             let targetNode = rightClickedKonvaNode || selectedKonvaNode;
             if (targetNode) {
-                editTextOnKonvaNode(targetNode);
+                editTextOnKonvaNode(targetNode); // UPDATED call
             }
             hideContextMenu();
         });
@@ -2958,9 +2794,10 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (ctxGenerateActionPlanButton) {
+        // FIX: Corrected variable name from ctxGenerateActionPlanPlan to ctxGenerateActionPlanButton
         ctxGenerateActionPlanButton.addEventListener('click', async () => {
             let targetNodeForPlan = rightClickedKonvaNode || selectedKonvaNode;
-            if (!targetNodeForPlan) {
+            if (!targetNodeForPlan) { // Added check for targetNodeForPlan
                 alert("Vui lòng chọn một nút để AI tạo kế hoạch hành động.");
                 hideContextMenu();
                 return;
@@ -2969,10 +2806,10 @@ window.addEventListener('DOMContentLoaded', () => {
             hideContextMenu();
         });
     }
-    if (ctxGenerateOutlineButton) {
-        console.log("Assigning click listener to ctxGenerateOutlineButton.");
+    if (ctxGenerateOutlineButton) { // NEW: Add event listener for Generate Outline button
+        console.log("Assigning click listener to ctxGenerateOutlineButton."); // Debug log for assignment
         ctxGenerateOutlineButton.addEventListener('click', async () => {
-            console.log("ctxGenerateOutlineButton clicked.");
+            console.log("ctxGenerateOutlineButton clicked."); // Debug log for click
             let targetNodeForOutline = rightClickedKonvaNode || selectedKonvaNode;
             if (!targetNodeForOutline) {
                 alert("Vui lòng chọn một nút để AI tạo dàn ý.");
@@ -2983,19 +2820,9 @@ window.addEventListener('DOMContentLoaded', () => {
             hideContextMenu();
         });
     }
-    if (ctxOptimizeLayoutButton) {
-        console.log("Assigning click listener to ctxOptimizeLayoutButton.");
-        ctxOptimizeLayoutButton.addEventListener('click', async () => {
-            console.log("ctxOptimizeLayoutButton clicked.");
-            let targetNodeForLayout = rightClickedKonvaNode || selectedKonvaNode;
-            // If no node is selected, optimize the entire map. Otherwise, optimize the branch.
-            await optimizeLayoutWithAI(targetNodeForLayout ? targetNodeForLayout.id() : null);
-            hideContextMenu();
-        });
-    }
     if (ctxDeleteNodeButton) {
         ctxDeleteNodeButton.addEventListener('click', async () => {
-            console.log("Delete Node button clicked in context menu.");
+            console.log("Delete Node button clicked in context menu."); // Debug log
             let targetNode = rightClickedKonvaNode || selectedKonvaNode;
             if (!targetNode || !currentMindMapId || !db) {
                  alert("Không thể xóa nút. Vui lòng thử lại."); hideContextMenu(); return;
@@ -3009,6 +2836,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // Global click listener to hide context menu if clicked outside
     document.addEventListener('click', function (e) {
         if (contextMenu && !contextMenu.classList.contains('hidden')) {
+            // Check if the click is outside the context menu and not on a Konva node (which might open it again)
             if (!contextMenu.contains(e.target) && e.target !== currentKonvaStage && !e.target.hasName?.('mindmapNodeGroup') && !e.target.getParent?.()?.hasName?.('mindmapNodeGroup')) {
                  hideContextMenu();
             }
