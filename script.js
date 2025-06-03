@@ -2584,7 +2584,6 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
         hideLoadingIndicator();
     }
 }
-
 // --- TOOLBAR BUTTON ACTIONS & KEYBOARD SHORTCUTS & ZOOM ---
 async function addChildNodeLogic(parentNode) {
     if (!parentNode || !currentMindMapId || !db) return;
