@@ -1852,7 +1852,6 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -2243,7 +2242,8 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
             positions[current.id] = { x: current.x, y: current.y };
 
             const directChildren = childrenMap.get(current.id) || [];
-            let childStartX = current.x - (directChildren.length - 1) * (horizontalSpacing + DEFAULT_NODE_STYLE.width) / 2; // Center children under parent
+            // Calculate starting X for children to center them under the parent, adjusted for tighter packing
+            let childStartX = current.x - (directChildren.length - 1) * (DEFAULT_NODE_STYLE.width + horizontalSpacing) / 2; 
 
             directChildren.forEach((child, index) => {
                 const childLevel = current.level + 1;
@@ -2264,21 +2264,12 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         return positions;
     };
 
-    // Find the actual root node for the layout
-    let layoutRootId = rootNodeForLayout.id;
-    
-    // No need for this check anymore, as it's handled above
-    // if (!layoutRootId) {
-    //     alert("Không tìm thấy node gốc để tối ưu hóa bố cục.");
-    //     hideLoadingIndicator();
-    //     return;
-    // }
-
 
     const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
     const initialY = 50;
-    const horizontalSpacing = 80;
-    const verticalSpacing = 60;
+    // FIX: Reduced horizontal and vertical spacing for a more compact layout
+    const horizontalSpacing = 40; // Reduced from 80
+    const verticalSpacing = 40;   // Reduced from 60
 
     const newPositions = layoutAlgorithm(graphNodes, layoutRootId, initialX, initialY, horizontalSpacing, verticalSpacing);
 
@@ -2360,7 +2351,7 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
 
         if (!mindmapStructureText) {
             alert("AI không thể tạo cấu trúc sơ đồ tư duy từ văn bản này. Vui lòng thử lại với nội dung khác hoặc định dạng rõ ràng hơn.");
-            openAiResponseModal("Phản hồi AI trống", textContent, "AI không tạo ra cấu trúc sơ đồ tư duy. Vui lòng thử lại.");
+            openAiResponseModal("Phản hồi AI trống", textContent, mindmapStructureText);
             return;
         }
 
