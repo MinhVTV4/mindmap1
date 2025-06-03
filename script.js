@@ -95,7 +95,7 @@ let gridLines = []; // To store Konva Line objects for the grid
 
 // --- DOM ELEMENT VARIABLES ---
 let nodeStylePanel, nodeShapeSelect, nodeFontFamilySelect, nodeFontSizeInput, nodeIconSelect, nodeBgColorInput, nodeTextColorInput, nodeBorderColorInput, nodeLineColorInput, nodeLineDashSelect, nodeLineWidthInput;
-let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton;
+let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton, ctxGenerateOutlineButton, ctxOptimizeLayoutButton; // NEW: ctxOptimizeLayoutButton
 let aiLoadingIndicator, aiResponseModalOverlay, aiResponseModalTitle, aiResponseModalBody, aiResponseModalCloseButton;
 let nodeContentModalOverlay, nodeContentModalTitle, nodeContentModalBody, nodeContentModalCloseButton;
 let editNodeTextModalOverlay, editNodeTextModalTitle, editNodeTextarea, editNodeTextModalSaveButton, editNodeTextModalCancelButton, editNodeTextModalCloseButton; // NEW modal elements
@@ -492,7 +492,7 @@ function calculatePotentialFullHeight(text, styleConfig) {
         text: text,
         fontSize: style.fontSize,
         fontFamily: style.fontFamily,
-        width: mainTextWidth > 0 ? mainTextWidth : 0, // Ensure width is not negative
+        width: mainTextWidth > 0 ? mainTextWidth : 0, // Prevent negative width
         align: 'center',
         lineHeight: 1.2 // Consistent line height
     });
@@ -659,7 +659,7 @@ async function deleteMindMap(mapId) {
         // The onSnapshot listener for mind maps will automatically update the list
     } catch (error) {
         console.error("Error deleting mind map: ", error);
-        alert("Lỗi khi xóa sơ đồ: " + error.message);
+        alert("Lỗi khi xóa sơ đồ: " + e.message);
     }
 }
 
@@ -816,7 +816,7 @@ function initKonvaStage() {
             if (lastDist > 0) { // Only zoom if a previous distance was recorded (i.e., pinch has started)
                 const pointTo = { // Calculate mouse pointer position relative to the stage
                     x: (currentCenter.x - currentKonvaStage.x()) / currentKonvaStage.scaleX(),
-                    y: (currentCenter.y - currentKonvaStage.y()) / currentKonvaStage.scaleX(),
+                    y: (currentCenter.y - currentKonvaStage.y()) / currentKonvaStage.scaleY(),
                 };
 
                 const newScale = currentKonvaStage.scaleX() * (currentDist / lastDist); // Calculate new scale
@@ -948,7 +948,7 @@ function initKonvaStage() {
         }
 
         let hitShape = e_context.target;
-        let determinedTargetNodeGroup = null; // FIX: Declare determinedTargetNodeGroup with let
+        let determinedTargetNodeGroup = null;
 
         // Traverse up to find the 'mindmapNodeGroup'
         let currentShape = hitShape;
@@ -964,7 +964,7 @@ function initKonvaStage() {
         }
 
         if (determinedTargetNodeGroup) { // A mindmap node was right-clicked
-            rightClickedKonvaNode = determinedTargetNodeGroup; // FIX: Use determinedTargetNodeGroup
+            rightClickedKonvaNode = determinedTargetNodeGroup;
             // Select the node if not already selected
             if (!selectedKonvaNode || selectedKonvaNode.id() !== rightClickedKonvaNode.id()) {
                 if (selectedKonvaNode) { selectedKonvaNode.findOne('.nodeShape')?.strokeWidth(1); removeCreationHandle(selectedKonvaNode); }
@@ -1300,7 +1300,7 @@ function renderNodesAndLines(nodesData) {
             if (e.target.name() === 'readMoreIndicator') return; // Handled by its own listener
             if (this.isDragging && this.isDragging()) { return; } // Don't select if it was a drag operation
 
-            const isPrimaryInteraction = (e.evt.button === 0 && e.type === 'click') || e.type === 'tap';
+            const isPrimaryInteraction = (ev.evt.button === 0 && ev.type === 'click') || ev.type === 'tap';
 
             if (isPrimaryInteraction) {
                 if (contextMenuJustOpened) { // If context menu was just opened by this click/tap (e.g., long press)
@@ -1329,7 +1329,7 @@ function renderNodesAndLines(nodesData) {
 
             // Hide context menu if a primary click occurs outside of it
             if (isPrimaryInteraction && contextMenu && !contextMenu.classList.contains('hidden')) {
-                if (!contextMenu.contains(e.evt.target)) { // If click is outside context menu
+                if (!contextMenu.contains(e.target)) { // If click is outside context menu
                      hideContextMenu();
                 }
             }
@@ -1690,14 +1690,13 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
             });
             await batch.commit();
         } else {
-            alert("AI không thể đưa ra gợi ý nào phù hợp vào lúc này.");
+            alert("AI không thể đưa ra gợi ý nào phù intimidating vào lúc này.");
         }
     } catch (error) {
         console.error("Error calling Gemini API (suggestChildNodesWithAI):", error);
         let userMessage = "Lỗi khi AI gợi ý nút con: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         alert(userMessage);
@@ -1793,8 +1792,8 @@ async function generateExamplesWithAI(targetNodeKonva) {
                 const newNodeData = {
                     mapId: currentMindMapId,
                     parentId: targetNodeId,
-                    text: `Ví dụ: ${suggestion}`, // FIX: Changed 'example' to 'suggestion'
-                    position: { x: startX, y: startY + (index * yOffsetIncrement) },
+                    text: `Ví dụ: ${suggestion}`,
+                    position: { x: startX + (index * 10), y: startY + (index * yOffsetIncrement) }, // Stagger positions slightly
                     style: exampleNodeStyle,
                     createdAt: serverTimestamp()
                 };
@@ -1810,7 +1809,6 @@ async function generateExamplesWithAI(targetNodeKonva) {
         let userMessage = "Lỗi khi AI tạo ví dụ: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         alert(userMessage);
@@ -1928,7 +1926,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
                 parentId: rootNodeId, // Child of the node that was summarized
                 text: `📄 Tóm tắt nhánh:\n${summaryText}`,
                 position: {
-                    x: targetNodeKonva.x() + parentWidth / 4 + 10, // Position it near the parent
+                    x: targetNodeKonva.x() + parentWidth / 4 + 10,
                     y: targetNodeKonva.y() + parentHeight + 35
                 },
                 style: {
@@ -1960,10 +1958,9 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         let userMessage = "Lỗi khi AI tóm tắt nhánh: " + error.message;
          if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
-        openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
+        openAiResponseModal( `Lỗi AI khi tạo dàn ý`, truncatedContent, userMessage );
     } finally {
         hideLoadingIndicator();
     }
@@ -2057,6 +2054,261 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
     }
 }
 
+async function generateOutlineWithAI(targetNodeKonva) {
+    console.log("Attempting to generate outline with AI for node:", targetNodeKonva.id()); // Debug log
+    if (!generativeModel || !targetNodeKonva || !currentMindMapId || !currentUser || !db) {
+        alert("Chức năng AI chưa sẵn sàng hoặc không có nút nào được chọn.");
+        hideContextMenu(); return;
+    }
+    const rootNodeId = targetNodeKonva.id();
+    const rootNodeData = allNodesDataForCurrentMap.find(n => n.id === rootNodeId);
+    if (!rootNodeData) {
+        alert("Không tìm thấy dữ liệu cho nút gốc của nhánh.");
+        hideContextMenu(); return;
+    }
+
+    showLoadingIndicator("AI đang tạo dàn ý...");
+    hideContextMenu();
+
+    const branchTextsArray = [];
+    // Collect all text from the branch, maintaining hierarchy for the prompt
+    function collectBranchTextForOutline(nodeId, allNodes, level, collectedTexts) {
+        const node = allNodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        const indent = '  '.repeat(level); // Use 2 spaces for Markdown sub-levels
+        collectedTexts.push(`${indent}- ${node.text || ""}`); // Markdown list item format
+
+        const children = allNodes.filter(n => n.parentId === nodeId);
+        // Sort children to maintain a consistent order in the outline if needed
+        children.sort((a, b) => a.text.localeCompare(b.text)); // Simple alphabetical sort for consistency
+
+        for (const child of children) {
+            collectBranchTextForOutline(child.id, allNodes, level + 1, collectedTexts);
+        }
+    }
+
+    collectBranchTextForOutline(rootNodeId, allNodesDataForCurrentMap, 0, branchTextsArray);
+
+    if (branchTextsArray.length === 0) {
+        alert("Không có dữ liệu văn bản trong nhánh này để tạo dàn ý.");
+        hideLoadingIndicator(); return;
+    }
+
+    const branchContentForPrompt = branchTextsArray.join('\n');
+    const maxContentLength = 15000; // Adjust as needed, consider token limits for the model
+    let truncatedContent = branchContentForPrompt;
+    let isTruncated = false;
+    if (branchContentForPrompt.length > maxContentLength) {
+        console.warn("Nội dung nhánh quá dài, đã được cắt bớt để gửi cho AI.");
+        truncatedContent = branchContentForPrompt.substring(0, maxContentLength) + "\n... (nội dung đã được cắt bớt do quá dài)";
+        isTruncated = true;
+    }
+
+    const prompt = `Bạn là một trợ lý AI chuyên nghiệp trong việc tạo dàn ý.
+Dưới đây là cấu trúc và nội dung của một nhánh sơ đồ tư duy, được trình bày theo định dạng Markdown với các cấp độ thụt lề:
+---
+${truncatedContent}
+---
+${isTruncated ? "\LƯU Ý: Nội dung trên có thể đã được rút gọn do giới hạn độ dài.\n" : ""}
+Nhiệm vụ của bạn là tạo một dàn ý chi tiết cho một bài thuyết trình, báo cáo hoặc tài liệu, dựa trên cấu trúc và ý tưởng của nhánh sơ đồ tư duy này.
+Dàn ý cần tuân thủ các quy tắc sau:
+1.  Sử dụng định dạng Markdown với tiêu đề cấp độ (headings: #, ##, ###) và danh sách (bullet points: * hoặc -) để thể hiện cấu trúc phân cấp.
+2.  Tiêu đề cấp 1 (#) cho chủ đề chính (nút gốc của nhánh).
+3.  Tiêu đề cấp 2 (##) cho các ý chính cấp độ 1 (con trực tiếp của nút gốc).
+4.  Tiêu đề cấp 3 (###) hoặc danh sách con (bullet points) cho các ý phụ cấp độ 2 trở xuống.
+5.  Mỗi mục trong dàn ý nên ngắn gọn, súc tích, nhưng đủ thông tin để hiểu ý tưởng.
+6.  Không bao gồm bất kỳ lời giới thiệu hay kết luận nào ngoài dàn ý.
+
+Hãy cung cấp dàn ý của bạn:`;
+
+    try {
+        const result = await generativeModel.generateContent(prompt);
+        const response = result.response;
+        const outlineText = response.text().trim();
+        const rootNodeTextPreview = (rootNodeData.text || "Không có tiêu đề").substring(0, 30) + ((rootNodeData.text || "").length > 30 ? "..." : "");
+
+        if (outlineText) {
+            openAiResponseModal(`📝 Dàn ý cho: "${rootNodeTextPreview}"`, truncatedContent, outlineText);
+        } else {
+            openAiResponseModal(
+                `📝 Dàn ý cho: "${rootNodeTextPreview}"`,
+                truncatedContent,
+                "AI không thể tạo dàn ý cho nhánh này vào lúc này. Vui lòng thử lại hoặc kiểm tra nội dung nhánh."
+            );
+        }
+    } catch (error) {
+        console.error("Error calling Gemini API (generateOutlineWithAI):", error);
+        let userMessage = "Lỗi khi AI tạo dàn ý: " + error.message;
+        if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
+        else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
+        else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
+        openAiResponseModal( `Lỗi AI khi tạo dàn ý`, truncatedContent, userMessage );
+    } finally {
+        hideLoadingIndicator();
+    }
+}
+
+// NEW: AI-driven Layout Optimization
+async function optimizeLayoutWithAI(targetNodeId = null) {
+    console.log("Attempting to optimize layout with AI. Target Node ID:", targetNodeId); // Debug log
+    if (!currentKonvaStage || !currentKonvaLayer || !currentMindMapId || !db || !currentUser) {
+        alert("Không thể tối ưu hóa bố cục. Canvas hoặc cơ sở dữ liệu chưa sẵn sàng.");
+        return;
+    }
+
+    // FIX: Check if there are any nodes to optimize at all
+    if (allNodesDataForCurrentMap.length === 0) {
+        alert("Không có nút nào trong sơ đồ để tối ưu hóa bố cục.");
+        hideLoadingIndicator();
+        return;
+    }
+
+    showLoadingIndicator("AI đang tối ưu hóa bố cục sơ đồ...");
+
+    let nodesToOptimize = [];
+    let rootNodeForLayout = null;
+
+    if (targetNodeId) {
+        // Optimize a specific branch
+        rootNodeForLayout = allNodesDataForCurrentMap.find(n => n.id === targetNodeId);
+        if (!rootNodeForLayout) {
+            alert("Không tìm thấy nút để tối ưu hóa bố cục.");
+            hideLoadingIndicator();
+            return;
+        }
+        // Collect all nodes in the branch
+        const branchNodeIds = [rootNodeForLayout.id].concat(findAllDescendantNodeIds(rootNodeForLayout.id, allNodesDataForCurrentMap));
+        nodesToOptimize = allNodesDataForCurrentMap.filter(n => branchNodeIds.includes(n.id));
+        console.log("Optimizing branch nodes:", nodesToOptimize.map(n => n.text));
+    } else {
+        // Optimize the entire map
+        nodesToOptimize = [...allNodesDataForCurrentMap];
+        // Find a suitable root if optimizing entire map without a specified target
+        // Prioritize a node with parentId === null, otherwise pick the first node
+        rootNodeForLayout = allNodesDataForCurrentMap.find(n => n.parentId === null);
+        if (!rootNodeForLayout && nodesToOptimize.length > 0) {
+            rootNodeForLayout = nodesToOptimize[0]; // Fallback to first node if no explicit root
+        }
+        console.log("Optimizing entire map. Root node:", rootNodeForLayout?.text);
+    }
+
+    // FIX: If after determining the scope, nodesToOptimize is still empty or rootNodeForLayout is null
+    if (nodesToOptimize.length === 0 || !rootNodeForLayout) {
+        alert("Không tìm thấy nút nào phù hợp để tối ưu hóa bố cục. Đảm bảo sơ đồ có ít nhất một nút.");
+        hideLoadingIndicator();
+        return;
+    }
+
+    // Prepare data for layout algorithm: convert to a simpler graph structure
+    const graphNodes = nodesToOptimize.map(node => ({
+        id: node.id,
+        text: node.text,
+        parentId: node.parentId,
+        level: node.level, // Use existing level or calculate if needed
+        width: node.style?.width || DEFAULT_NODE_STYLE.width,
+        height: node.style?.minHeight || DEFAULT_NODE_STYLE.minHeight, // Use minHeight for layout calc
+    }));
+
+    // Simple hierarchical layout algorithm (for demonstration)
+    // This is a basic implementation and can be replaced with more sophisticated algorithms
+    const layoutAlgorithm = (nodes, rootId, initialX, initialY, horizontalSpacing, verticalSpacing) => {
+        const positions = {};
+        const childrenMap = new Map();
+        nodes.forEach(node => {
+            if (node.parentId) {
+                if (!childrenMap.has(node.parentId)) {
+                    childrenMap.set(node.parentId, []);
+                }
+                childrenMap.get(node.parentId).push(node);
+            }
+        });
+
+        // Sort children for consistent layout
+        childrenMap.forEach(children => {
+            children.sort((a, b) => a.text.localeCompare(b.text));
+        });
+
+        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0 }];
+        const visited = new Set();
+        let currentLevelY = { 0: initialY }; // Tracks Y position for each level
+        let currentLevelMaxX = { 0: initialX + (nodes.find(n => n.id === rootId)?.width || DEFAULT_NODE_STYLE.width) / 2 }; // Tracks max X for each level
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (visited.has(current.id)) continue;
+            visited.add(current.id);
+
+            positions[current.id] = { x: current.x, y: current.y };
+
+            const directChildren = childrenMap.get(current.id) || [];
+            let childStartX = current.x - (directChildren.length - 1) * (horizontalSpacing + DEFAULT_NODE_STYLE.width) / 2; // Center children under parent
+
+            directChildren.forEach((child, index) => {
+                const childLevel = current.level + 1;
+                const childY = (currentLevelY[childLevel] || (current.y + (nodes.find(n => n.id === current.id)?.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing));
+                
+                let childX = childStartX + index * (DEFAULT_NODE_STYLE.width + horizontalSpacing);
+
+                // Adjust X to avoid overlap with previous nodes on the same level
+                if (currentLevelMaxX[childLevel] && childX < currentLevelMaxX[childLevel] + horizontalSpacing) {
+                    childX = currentLevelMaxX[childLevel] + horizontalSpacing;
+                }
+
+                queue.push({ id: child.id, x: childX, y: childY, level: childLevel });
+                currentLevelY[childLevel] = childY;
+                currentLevelMaxX[childLevel] = childX + DEFAULT_NODE_STYLE.width;
+            });
+        }
+        return positions;
+    };
+
+    // Find the actual root node for the layout
+    let layoutRootId = rootNodeForLayout.id;
+    
+    // No need for this check anymore, as it's handled above
+    // if (!layoutRootId) {
+    //     alert("Không tìm thấy node gốc để tối ưu hóa bố cục.");
+    //     hideLoadingIndicator();
+    //     return;
+    // }
+
+
+    const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
+    const initialY = 50;
+    const horizontalSpacing = 80;
+    const verticalSpacing = 60;
+
+    const newPositions = layoutAlgorithm(graphNodes, layoutRootId, initialX, initialY, horizontalSpacing, verticalSpacing);
+
+    // Apply updates to Firestore in a batch
+    const batch = writeBatch(db);
+    let updatesCount = 0;
+    nodesToOptimize.forEach(node => {
+        const newPos = newPositions[node.id];
+        if (newPos && (node.position.x !== newPos.x || node.position.y !== newPos.y)) {
+            batch.update(doc(db, "nodes", node.id), { position: newPos });
+            updatesCount++;
+        }
+    });
+
+    try {
+        if (updatesCount > 0) {
+            await batch.commit();
+            alert(`AI đã tối ưu hóa bố cục cho ${updatesCount} nút.`);
+        } else {
+            alert("Không có thay đổi bố cục đáng kể nào được AI đề xuất.");
+        }
+    } catch (error) {
+        console.error("Error optimizing layout:", error);
+        alert("Lỗi khi tối ưu hóa bố cục: " + error.message);
+    } finally {
+        hideLoadingIndicator();
+    }
+}
+
+
 async function handleGenerateMindmapFromText() {
     if (!generativeModel || !db || !currentUser) {
         alert("Chức năng AI chưa sẵn sàng hoặc bạn chưa đăng nhập.");
@@ -2082,7 +2334,7 @@ Sơ đồ tư duy cần được cấu trúc theo định dạng Markdown đư�
 - Tránh lặp lại nội dung giống hệt nhau.
 - Tập trung vào việc tạo ra một cấu trúc logic và dễ hiểu.
 - Không bao gồm bất kỳ văn bản giới thiệu hay kết luận nào ngoài cấu trúc sơ đồ tư duy.
-- Không đánh số, chỉ dùng dấu gạch ngang.
+- Không đánh số, chỉ dùng dấu gạch đầu dòng.
 
 Ví dụ định dạng đầu ra mong muốn:
 - Nút gốc của sơ đồ tư duy
@@ -2281,7 +2533,6 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
         let userMessage = "Lỗi khi AI tạo sơ đồ từ văn bản: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Văn bản đầu vào có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal("Lỗi AI Tạo Sơ đồ", textContent, userMessage);
@@ -2494,6 +2745,8 @@ window.addEventListener('DOMContentLoaded', () => {
     ctxAskAiNodeButton = document.getElementById('ctx-ask-ai-node');
     ctxSummarizeBranchButton = document.getElementById('ctx-summarize-branch');
     ctxGenerateActionPlanButton = document.getElementById('ctx-generate-action-plan');
+    ctxGenerateOutlineButton = document.getElementById('ctx-generate-outline');
+    ctxOptimizeLayoutButton = document.getElementById('ctx-optimize-layout'); // Assign new button
     ctxDeleteNodeButton = document.getElementById('ctx-delete-node');
 
     aiLoadingIndicator = document.getElementById('ai-loading-indicator');
@@ -2507,7 +2760,6 @@ window.addEventListener('DOMContentLoaded', () => {
     nodeContentModalBody = document.getElementById('node-content-modal-body');
     nodeContentModalCloseButton = document.getElementById('node-content-modal-close-button');
 
-    // NEW: Assign Edit Node Text Modal elements
     editNodeTextModalOverlay = document.getElementById('edit-node-text-modal-overlay');
     editNodeTextModalTitle = document.getElementById('edit-node-text-modal-title');
     editNodeTextarea = document.getElementById('edit-node-textarea');
@@ -2540,11 +2792,9 @@ window.addEventListener('DOMContentLoaded', () => {
     mindmapManagementView = document.getElementById('mindmap-management-view');
     newMindmapTitleInput = document.getElementById('new-mindmap-title-input');
     createMindmapButton = document.getElementById('create-mindmap-button');
-    // FIX: Corrected DOM element assignment for normal mind map list
     normalMindmapListUl = document.getElementById('normal-mindmap-list');
     normalMindmapListLoading = document.getElementById('normal-mindmap-list-loading');
 
-    // FIX: Corrected DOM element assignment for AI mind map list
     aiMindmapListUl = document.getElementById('ai-mindmap-list');
     aiMindmapListLoading = document.getElementById('ai-mindmap-list-loading');
 
@@ -2560,12 +2810,10 @@ window.addEventListener('DOMContentLoaded', () => {
     konvaContainer = document.getElementById('konva-container');
     konvaContainerLoading = document.getElementById('konva-container-loading');
 
-    // NEW: Assign AI from Text elements
     aiTextInput = document.getElementById('ai-text-input');
     generateMindmapFromTextButton = document.getElementById('generate-mindmap-from-text-button');
     aiMindmapTitleInput = document.getElementById('ai-mindmap-title-input');
 
-    // NEW: Assign grid control elements
     toggleGridCheckbox = document.getElementById('toggle-grid');
     toggleSnapToGridCheckbox = document.getElementById('toggle-snap-to-grid');
     gridSizeInput = document.getElementById('grid-size-input');
@@ -2577,20 +2825,18 @@ window.addEventListener('DOMContentLoaded', () => {
     if (nodeContentModalCloseButton) { nodeContentModalCloseButton.addEventListener('click', closeNodeContentModal); }
     if (nodeContentModalOverlay) { nodeContentModalOverlay.addEventListener('click', function(event) { if (event.target === nodeContentModalOverlay) closeNodeContentModal(); });}
 
-    // NEW: Event listeners for Edit Node Text Modal
     if (editNodeTextModalSaveButton) { editNodeTextModalSaveButton.addEventListener('click', handleSaveNodeTextFromModal); }
     if (editNodeTextModalCancelButton) { editNodeTextModalCancelButton.addEventListener('click', closeEditNodeModal); }
     if (editNodeTextModalCloseButton) { editNodeTextModalCloseButton.addEventListener('click', closeEditNodeModal); }
-    if (editNodeTextarea) { // Allow Ctrl+Enter to save, Enter for new line
+    if (editNodeTextarea) {
         editNodeTextarea.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && e.ctrlKey) { // Ctrl+Enter to save
+            if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
                 handleSaveNodeTextFromModal();
-            } else if (e.key === 'Escape') { // Allow Esc from textarea to close modal
+            } else if (e.key === 'Escape') {
                 e.preventDefault();
                 closeEditNodeModal();
             }
-            // Default Enter behavior (new line) is allowed if Ctrl is not pressed
         });
     }
 
@@ -2605,10 +2851,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (backToMapsListButton) { backToMapsListButton.addEventListener('click', showMindmapManagementView); }
 
-    // Node Style Panel Listeners
     if (nodeShapeSelect) nodeShapeSelect.addEventListener('change', (e) => handleNodeStyleChange('shape', e.target.value));
     if (nodeFontFamilySelect) nodeFontFamilySelect.addEventListener('change', (e) => handleNodeStyleChange('fontFamily', e.target.value));
-    if (nodeFontSizeInput) nodeFontSizeInput.addEventListener('input', (e) => handleNodeStyleChange('fontSize', e.target.value)); // Use input for live changes
+    if (nodeFontSizeInput) nodeFontSizeInput.addEventListener('input', (e) => handleNodeStyleChange('fontSize', e.target.value));
     if (nodeIconSelect) nodeIconSelect.addEventListener('change', (e) => handleNodeStyleChange('icon', e.target.value));
     if (nodeBgColorInput) nodeBgColorInput.addEventListener('input', (e) => handleNodeStyleChange('backgroundColor', e.target.value));
     if (nodeTextColorInput) nodeTextColorInput.addEventListener('input', (e) => handleNodeStyleChange('textColor', e.target.value));
@@ -2620,31 +2865,29 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (createMindmapButton) { createMindmapButton.addEventListener('click', handleCreateMindmap); }
 
-    // NEW: AI Generate Mindmap from Text Listener
     if (generateMindmapFromTextButton) {
         generateMindmapFromTextButton.addEventListener('click', handleGenerateMindmapFromText);
     }
 
-    // NEW: Grid and Snap-to-Grid Listeners
     if (toggleGridCheckbox) {
         toggleGridCheckbox.addEventListener('change', (e) => {
             isGridVisible = e.target.checked;
             updateGrid();
-            saveCanvasState(); // Save grid visibility state
+            saveCanvasState();
         });
     }
     if (toggleSnapToGridCheckbox) {
         toggleSnapToGridCheckbox.addEventListener('change', (e) => {
             isSnapToGridEnabled = e.target.checked;
-            saveCanvasState(); // Save snap-to-grid state
+            saveCanvasState();
         });
     }
     if (gridSizeInput) {
         gridSizeInput.addEventListener('input', (e) => {
             gridSize = parseInt(e.target.value, 10);
-            if (isNaN(gridSize) || gridSize < 10) gridSize = 10; // Minimum grid size
-            if (isGridVisible) updateGrid(); // Redraw grid if visible
-            saveCanvasState(); // Save grid size
+            if (isNaN(gridSize) || gridSize < 10) gridSize = 10;
+            if (isGridVisible) updateGrid();
+            saveCanvasState();
         });
     }
 
@@ -2665,7 +2908,7 @@ window.addEventListener('DOMContentLoaded', () => {
         ctxEditTextButton.addEventListener('click', () => {
             let targetNode = rightClickedKonvaNode || selectedKonvaNode;
             if (targetNode) {
-                editTextOnKonvaNode(targetNode); // UPDATED call
+                editTextOnKonvaNode(targetNode);
             }
             hideContextMenu();
         });
@@ -2717,10 +2960,9 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (ctxGenerateActionPlanButton) {
-        // FIX: Corrected variable name from ctxGenerateActionPlanPlan to ctxGenerateActionPlanButton
         ctxGenerateActionPlanButton.addEventListener('click', async () => {
             let targetNodeForPlan = rightClickedKonvaNode || selectedKonvaNode;
-            if (!targetNodeForPlan) { // Added check for targetNodeForPlan
+            if (!targetNodeForPlan) {
                 alert("Vui lòng chọn một nút để AI tạo kế hoạch hành động.");
                 hideContextMenu();
                 return;
@@ -2729,9 +2971,33 @@ window.addEventListener('DOMContentLoaded', () => {
             hideContextMenu();
         });
     }
+    if (ctxGenerateOutlineButton) {
+        console.log("Assigning click listener to ctxGenerateOutlineButton.");
+        ctxGenerateOutlineButton.addEventListener('click', async () => {
+            console.log("ctxGenerateOutlineButton clicked.");
+            let targetNodeForOutline = rightClickedKonvaNode || selectedKonvaNode;
+            if (!targetNodeForOutline) {
+                alert("Vui lòng chọn một nút để AI tạo dàn ý.");
+                hideContextMenu();
+                return;
+            }
+            await generateOutlineWithAI(targetNodeForOutline);
+            hideContextMenu();
+        });
+    }
+    if (ctxOptimizeLayoutButton) {
+        console.log("Assigning click listener to ctxOptimizeLayoutButton.");
+        ctxOptimizeLayoutButton.addEventListener('click', async () => {
+            console.log("ctxOptimizeLayoutButton clicked.");
+            let targetNodeForLayout = rightClickedKonvaNode || selectedKonvaNode;
+            // If no node is selected, optimize the entire map. Otherwise, optimize the branch.
+            await optimizeLayoutWithAI(targetNodeForLayout ? targetNodeForLayout.id() : null);
+            hideContextMenu();
+        });
+    }
     if (ctxDeleteNodeButton) {
         ctxDeleteNodeButton.addEventListener('click', async () => {
-            console.log("Delete Node button clicked in context menu."); // Debug log
+            console.log("Delete Node button clicked in context menu.");
             let targetNode = rightClickedKonvaNode || selectedKonvaNode;
             if (!targetNode || !currentMindMapId || !db) {
                  alert("Không thể xóa nút. Vui lòng thử lại."); hideContextMenu(); return;
@@ -2745,7 +3011,6 @@ window.addEventListener('DOMContentLoaded', () => {
     // Global click listener to hide context menu if clicked outside
     document.addEventListener('click', function (e) {
         if (contextMenu && !contextMenu.classList.contains('hidden')) {
-            // Check if the click is outside the context menu and not on a Konva node (which might open it again)
             if (!contextMenu.contains(e.target) && e.target !== currentKonvaStage && !e.target.hasName?.('mindmapNodeGroup') && !e.target.getParent?.()?.hasName?.('mindmapNodeGroup')) {
                  hideContextMenu();
             }
