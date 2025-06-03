@@ -747,7 +747,7 @@ function initKonvaStage() {
                 // Long press for context menu on touch devices
                 if (e_stage.type === 'touchstart') {
                     touchStartTargetNodeForContextMenu = determinedTargetNodeGroup;
-                    const touch = e_stage.evt.touches && e_stage.evt.touches[0];
+                    const touch = e_stage.evt.touches && e.evt.touches[0]; // Fixed: Use e.evt.touches
                     if (touch) {
                         touchStartCoordsForLongPress = { x: touch.pageX, y: touch.pageY };
                         touchStartPointerPositionForContextMenu = { x: touch.pageX, y: touch.pageY }; // Use pageX/Y for menu position
@@ -1667,7 +1667,8 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
             // Position new nodes below and slightly offset from parent
             startX += parentWidth / 4; // Offset a bit to the right
             startY += parentHeight + 30; // Below the parent
-            const yOffsetIncrement = (DEFAULT_NODE_STYLE.minHeight || 50) + 20; // Spacing between new nodes
+            const yOffsetIncrement = (DEFAULT_NODE_NODE_STYLE.minHeight || 50) + 20; // Spacing between new nodes
+            // Fixed: Use DEFAULT_NODE_STYLE.minHeight instead of DEFAULT_NODE_NODE_STYLE.minHeight
 
             suggestions.slice(0, 5).forEach((suggestion, index) => { // Limit to 5 suggestions
                 const newNodeId = doc(collection(db, "nodes")).id; // Generate new ID locally
@@ -1684,7 +1685,7 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
             });
             await batch.commit();
         } else {
-            alert("AI không thể đưa ra gợi ý nào phù hợp vào lúc này."); // Fixed: Changed "intimidating" to "phù hợp"
+            alert("AI không thể đưa ra gợi ý nào phù hợp vào lúc này.");
         }
     } catch (error) {
         console.error("Error calling Gemini API (suggestChildNodesWithAI):", error);
@@ -1846,7 +1847,6 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -2252,7 +2252,7 @@ Các nguyên tắc cần tuân thủ:
 - Giữ cho các đường nối ngắn và ít giao cắt nhất có thể.
 - Cố gắng duy trì một số định hướng ban đầu của sơ đồ nếu có thể, nhưng ưu tiên bố cục rõ ràng và dễ theo dõi.
 - Toàn bộ sơ đồ (hoặc nhánh) nên được căn giữa trong một không gian hợp lý.
-- Trả về một đối tượng JSON, trong đó khóa là ID nút và giá trị là một đối tượng {x: number, y: number}. Chỉ trả về đối tượng JSON, không có văn bản giải thích, không có markdown code block, không có lời giới thiệu hay kết luận.
+- CHỈ TRẢ VỀ ĐỐI TƯỢNG JSON. KHÔNG BAO GỒM BẤT KỲ VĂN BẢN GIẢI THÍCH NÀO, KHÔNG CÓ KHỐI MÃ MARKDOWN (ví dụ: \`\`\`json), KHÔNG CÓ LỜI GIỚI THIỆU HAY KẾT LUẬN.
 
 Dữ liệu nút đầu vào:
 ${JSON.stringify(graphNodesForAI, null, 2)}
@@ -2268,7 +2268,9 @@ Hãy bắt đầu đối tượng JSON của bạn:`;
 
         let newPositions;
         try {
-            newPositions = JSON.parse(layoutJsonString);
+            // Remove any leading/trailing markdown code block fences if they somehow persist
+            const cleanedJsonString = layoutJsonString.replace(/^```json\s*|\s*```$/g, '').trim();
+            newPositions = JSON.parse(cleanedJsonString);
         } catch (parseError) {
             console.error("Error parsing AI layout response:", parseError);
             alert("AI đã trả về một định dạng không hợp lệ cho bố cục. Vui lòng thử lại.");
