@@ -95,7 +95,7 @@ let gridLines = []; // To store Konva Line objects for the grid
 
 // --- DOM ELEMENT VARIABLES ---
 let nodeStylePanel, nodeShapeSelect, nodeFontFamilySelect, nodeFontSizeInput, nodeIconSelect, nodeBgColorInput, nodeTextColorInput, nodeBorderColorInput, nodeLineColorInput, nodeLineDashSelect, nodeLineWidthInput;
-let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton, ctxGenerateOutlineButton; // NEW: ctxGenerateOutlineButton
+let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton;
 let aiLoadingIndicator, aiResponseModalOverlay, aiResponseModalTitle, aiResponseModalBody, aiResponseModalCloseButton;
 let nodeContentModalOverlay, nodeContentModalTitle, nodeContentModalBody, nodeContentModalCloseButton;
 let editNodeTextModalOverlay, editNodeTextModalTitle, editNodeTextarea, editNodeTextModalSaveButton, editNodeTextModalCancelButton, editNodeTextModalCloseButton; // NEW modal elements
@@ -492,7 +492,7 @@ function calculatePotentialFullHeight(text, styleConfig) {
         text: text,
         fontSize: style.fontSize,
         fontFamily: style.fontFamily,
-        width: mainTextWidth > 0 ? mainTextWidth : 0, // Prevent negative width
+        width: mainTextWidth > 0 ? mainTextWidth : 0, // Ensure width is not negative
         align: 'center',
         lineHeight: 1.2 // Consistent line height
     });
@@ -659,7 +659,7 @@ async function deleteMindMap(mapId) {
         // The onSnapshot listener for mind maps will automatically update the list
     } catch (error) {
         console.error("Error deleting mind map: ", error);
-        alert("Lỗi khi xóa sơ đồ: " + e.message);
+        alert("Lỗi khi xóa sơ đồ: " + error.message);
     }
 }
 
@@ -1793,8 +1793,8 @@ async function generateExamplesWithAI(targetNodeKonva) {
                 const newNodeData = {
                     mapId: currentMindMapId,
                     parentId: targetNodeId,
-                    text: `Ví dụ: ${suggestion}`,
-                    position: { x: startX + (index * 10), y: startY + (index * yOffsetIncrement) }, // Stagger positions slightly
+                    text: `Ví dụ: ${suggestion}`, // FIX: Changed 'example' to 'suggestion'
+                    position: { x: startX, y: startY + (index * yOffsetIncrement) },
                     style: exampleNodeStyle,
                     createdAt: serverTimestamp()
                 };
@@ -1960,6 +1960,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         let userMessage = "Lỗi khi AI tóm tắt nhánh: " + error.message;
          if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
@@ -2056,102 +2057,6 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
     }
 }
 
-async function generateOutlineWithAI(targetNodeKonva) {
-    if (!generativeModel || !targetNodeKonva || !currentMindMapId || !currentUser || !db) {
-        alert("Chức năng AI chưa sẵn sàng hoặc không có nút nào được chọn.");
-        hideContextMenu(); return;
-    }
-    const rootNodeId = targetNodeKonva.id();
-    const rootNodeData = allNodesDataForCurrentMap.find(n => n.id === rootNodeId);
-    if (!rootNodeData) {
-        alert("Không tìm thấy dữ liệu cho nút gốc của nhánh.");
-        hideContextMenu(); return;
-    }
-
-    showLoadingIndicator("AI đang tạo dàn ý...");
-    hideContextMenu();
-
-    const branchTextsArray = [];
-    // Collect all text from the branch, maintaining hierarchy for the prompt
-    function collectBranchTextForOutline(nodeId, allNodes, level, collectedTexts) {
-        const node = allNodes.find(n => n.id === nodeId);
-        if (!node) return;
-
-        const indent = '  '.repeat(level); // Use 2 spaces for Markdown sub-levels
-        collectedTexts.push(`${indent}- ${node.text || ""}`); // Markdown list item format
-
-        const children = allNodes.filter(n => n.parentId === nodeId);
-        // Sort children to maintain a consistent order in the outline if needed
-        children.sort((a, b) => a.text.localeCompare(b.text)); // Simple alphabetical sort for consistency
-
-        for (const child of children) {
-            collectBranchTextForOutline(child.id, allNodes, level + 1, collectedTexts);
-        }
-    }
-
-    collectBranchTextForOutline(rootNodeId, allNodesDataForCurrentMap, 0, branchTextsArray);
-
-    if (branchTextsArray.length === 0) {
-        alert("Không có dữ liệu văn bản trong nhánh này để tạo dàn ý.");
-        hideLoadingIndicator(); return;
-    }
-
-    const branchContentForPrompt = branchTextsArray.join('\n');
-    const maxContentLength = 15000; // Adjust as needed, consider token limits for the model
-    let truncatedContent = branchContentForPrompt;
-    let isTruncated = false;
-    if (branchContentForPrompt.length > maxContentLength) {
-        console.warn("Nội dung nhánh quá dài, đã được cắt bớt để gửi cho AI.");
-        truncatedContent = branchContentForPrompt.substring(0, maxContentLength) + "\n... (nội dung đã được cắt bớt do quá dài)";
-        isTruncated = true;
-    }
-
-    const prompt = `Bạn là một trợ lý AI chuyên nghiệp trong việc tạo dàn ý.
-Dưới đây là cấu trúc và nội dung của một nhánh sơ đồ tư duy, được trình bày theo định dạng Markdown với các cấp độ thụt lề:
----
-${truncatedContent}
----
-${isTruncated ? "\LƯU Ý: Nội dung trên có thể đã được rút gọn do giới hạn độ dài.\n" : ""}
-Nhiệm vụ của bạn là tạo một dàn ý chi tiết cho một bài thuyết trình, báo cáo hoặc tài liệu, dựa trên cấu trúc và ý tưởng của nhánh sơ đồ tư duy này.
-Dàn ý cần tuân thủ các quy tắc sau:
-1.  Sử dụng định dạng Markdown với tiêu đề cấp độ (headings: #, ##, ###) và danh sách (bullet points: * hoặc -) để thể hiện cấu trúc phân cấp.
-2.  Tiêu đề cấp 1 (#) cho chủ đề chính (nút gốc của nhánh).
-3.  Tiêu đề cấp 2 (##) cho các ý chính cấp độ 1 (con trực tiếp của nút gốc).
-4.  Tiêu đề cấp 3 (###) hoặc danh sách con (bullet points) cho các ý phụ cấp độ 2 trở xuống.
-5.  Mỗi mục trong dàn ý nên ngắn gọn, súc tích, nhưng đủ thông tin để hiểu ý tưởng.
-6.  Không bao gồm bất kỳ lời giới thiệu hay kết luận nào ngoài dàn ý.
-
-Hãy cung cấp dàn ý của bạn:`;
-
-    try {
-        const result = await generativeModel.generateContent(prompt);
-        const response = result.response;
-        const outlineText = response.text().trim();
-        const rootNodeTextPreview = (rootNodeData.text || "Không có tiêu đề").substring(0, 30) + ((rootNodeData.text || "").length > 30 ? "..." : "");
-
-        if (outlineText) {
-            openAiResponseModal(`📝 Dàn ý cho: "${rootNodeTextPreview}"`, truncatedContent, outlineText);
-        } else {
-            openAiResponseModal(
-                `📝 Dàn ý cho: "${rootNodeTextPreview}"`,
-                truncatedContent,
-                "AI không thể tạo dàn ý cho nhánh này vào lúc này. Vui lòng thử lại hoặc kiểm tra nội dung nhánh."
-            );
-        }
-    } catch (error) {
-        console.error("Error calling Gemini API (generateOutlineWithAI):", error);
-        let userMessage = "Lỗi khi AI tạo dàn ý: " + error.message;
-        if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
-        else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
-        else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
-        openAiResponseModal( `Lỗi AI khi tạo dàn ý`, truncatedContent, userMessage );
-    } finally {
-        hideLoadingIndicator();
-    }
-}
-
-
 async function handleGenerateMindmapFromText() {
     if (!generativeModel || !db || !currentUser) {
         alert("Chức năng AI chưa sẵn sàng hoặc bạn chưa đăng nhập.");
@@ -2177,7 +2082,7 @@ Sơ đồ tư duy cần được cấu trúc theo định dạng Markdown đư�
 - Tránh lặp lại nội dung giống hệt nhau.
 - Tập trung vào việc tạo ra một cấu trúc logic và dễ hiểu.
 - Không bao gồm bất kỳ văn bản giới thiệu hay kết luận nào ngoài cấu trúc sơ đồ tư duy.
-- Không đánh số, chỉ dùng dấu gạch đầu dòng.
+- Không đánh số, chỉ dùng dấu gạch ngang.
 
 Ví dụ định dạng đầu ra mong muốn:
 - Nút gốc của sơ đồ tư duy
@@ -2376,6 +2281,7 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
         let userMessage = "Lỗi khi AI tạo sơ đồ từ văn bản: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Văn bản đầu vào có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal("Lỗi AI Tạo Sơ đồ", textContent, userMessage);
@@ -2588,7 +2494,6 @@ window.addEventListener('DOMContentLoaded', () => {
     ctxAskAiNodeButton = document.getElementById('ctx-ask-ai-node');
     ctxSummarizeBranchButton = document.getElementById('ctx-summarize-branch');
     ctxGenerateActionPlanButton = document.getElementById('ctx-generate-action-plan');
-    ctxGenerateOutlineButton = document.getElementById('ctx-generate-outline'); // NEW: Assign outline button
     ctxDeleteNodeButton = document.getElementById('ctx-delete-node');
 
     aiLoadingIndicator = document.getElementById('ai-loading-indicator');
@@ -2821,18 +2726,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             await generateActionPlanWithAI(targetNodeForPlan);
-            hideContextMenu();
-        });
-    }
-    if (ctxGenerateOutlineButton) { // NEW: Add event listener for Generate Outline button
-        ctxGenerateOutlineButton.addEventListener('click', async () => {
-            let targetNodeForOutline = rightClickedKonvaNode || selectedKonvaNode;
-            if (!targetNodeForOutline) {
-                alert("Vui lòng chọn một nút để AI tạo dàn ý.");
-                hideContextMenu();
-                return;
-            }
-            await generateOutlineWithAI(targetNodeForOutline);
             hideContextMenu();
         });
     }
