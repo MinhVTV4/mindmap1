@@ -95,7 +95,7 @@ let gridLines = []; // To store Konva Line objects for the grid
 
 // --- DOM ELEMENT VARIABLES ---
 let nodeStylePanel, nodeShapeSelect, nodeFontFamilySelect, nodeFontSizeInput, nodeIconSelect, nodeBgColorInput, nodeTextColorInput, nodeBorderColorInput, nodeLineColorInput, nodeLineDashSelect, nodeLineWidthInput;
-let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton, ctxGenerateOutlineButton; // NEW: ctxGenerateOutlineButton
+let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton, ctxGenerateOutlineButton, ctxOptimizeLayoutButton; // NEW: ctxOptimizeLayoutButton
 let aiLoadingIndicator, aiResponseModalOverlay, aiResponseModalTitle, aiResponseModalBody, aiResponseModalCloseButton;
 let nodeContentModalOverlay, nodeContentModalTitle, nodeContentModalBody, nodeContentModalCloseButton;
 let editNodeTextModalOverlay, editNodeTextModalTitle, editNodeTextarea, editNodeTextModalSaveButton, editNodeTextModalCancelButton, editNodeTextModalCloseButton; // NEW modal elements
@@ -780,8 +780,8 @@ function initKonvaStage() {
                             }
                             // Show context menu at touch position
                             if (contextMenu && touchStartPointerPositionForContextMenu) {
-                                contextMenu.style.top = touchStartPointerPositionForContextMenu.y + 'px';
-                                contextMenu.style.left = touchStartPointerPositionForContextMenu.x + 'px';
+                                contextMenu.style.top = e_context.evt.pageY + 'px'; // FIX: Use e_context.evt.pageY/X for Konva contextmenu
+                                contextMenu.style.left = e_context.evt.pageX + 'px';
                                 showElement(contextMenu);
                                 contextMenuJustOpened = true;
                             }
@@ -816,7 +816,7 @@ function initKonvaStage() {
             if (lastDist > 0) { // Only zoom if a previous distance was recorded (i.e., pinch has started)
                 const pointTo = { // Calculate mouse pointer position relative to the stage
                     x: (currentCenter.x - currentKonvaStage.x()) / currentKonvaStage.scaleX(),
-                    y: (currentCenter.y - currentKonvaStage.y()) / currentKonvaStage.scaleX(),
+                    y: (currentCenter.y - currentKonvaStage.y()) / currentKonvaStage.scaleY(),
                 };
 
                 const newScale = currentKonvaStage.scaleX() * (currentDist / lastDist); // Calculate new scale
@@ -1300,7 +1300,7 @@ function renderNodesAndLines(nodesData) {
             if (e.target.name() === 'readMoreIndicator') return; // Handled by its own listener
             if (this.isDragging && this.isDragging()) { return; } // Don't select if it was a drag operation
 
-            const isPrimaryInteraction = (e.evt.button === 0 && e.type === 'click') || e.type === 'tap';
+            const isPrimaryInteraction = (ev.evt.button === 0 && ev.type === 'click') || ev.type === 'tap';
 
             if (isPrimaryInteraction) {
                 if (contextMenuJustOpened) { // If context menu was just opened by this click/tap (e.g., long press)
@@ -1329,7 +1329,7 @@ function renderNodesAndLines(nodesData) {
 
             // Hide context menu if a primary click occurs outside of it
             if (isPrimaryInteraction && contextMenu && !contextMenu.classList.contains('hidden')) {
-                if (!contextMenu.contains(e.evt.target)) { // If click is outside context menu
+                if (!contextMenu.contains(e.target)) { // If click is outside context menu
                      hideContextMenu();
                 }
             }
@@ -1690,7 +1690,7 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
             });
             await batch.commit();
         } else {
-            alert("AI không thể đưa ra gợi ý nào phù hợp vào lúc này.");
+            alert("AI không thể đưa ra gợi ý nào phù intimidating vào lúc này.");
         }
     } catch (error) {
         console.error("Error calling Gemini API (suggestChildNodesWithAI):", error);
@@ -1925,7 +1925,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
                 parentId: rootNodeId, // Child of the node that was summarized
                 text: `📄 Tóm tắt nhánh:\n${summaryText}`,
                 position: {
-                    x: targetNodeKonva.x() + parentWidth / 4 + 10, // Position it near the parent
+                    x: targetNodeKonva.x() + parentWidth / 4 + 10,
                     y: targetNodeKonva.y() + parentHeight + 35
                 },
                 style: {
@@ -1946,7 +1946,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
             alert(`AI đã tạo một nút tóm tắt con cho nhánh "${rootNodeTextPreview}".`);
 
         } else {
-             openAiResponseModal(
+            openAiResponseModal(
                 `AI Tóm tắt nhánh: "${rootNodeTextPreview}"`,
                 truncatedContent, // Show what was sent to AI
                 "AI không thể tạo tóm tắt cho nhánh này vào lúc này. Vui lòng thử lại hoặc kiểm tra nội dung nhánh."
@@ -1959,7 +1959,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
-        openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
+        openAiResponseModal( `Lỗi AI khi tạo dàn ý`, truncatedContent, userMessage );
     } finally {
         hideLoadingIndicator();
     }
@@ -2149,6 +2149,193 @@ Hãy cung cấp dàn ý của bạn:`;
     }
 }
 
+// NEW: AI-driven Layout Optimization
+async function optimizeLayoutWithAI(targetNodeId = null) {
+    console.log("Attempting to optimize layout with AI. Target Node ID:", targetNodeId); // Debug log
+    if (!currentKonvaStage || !currentKonvaLayer || !currentMindMapId || !db || !currentUser) {
+        alert("Không thể tối ưu hóa bố cục. Canvas hoặc cơ sở dữ liệu chưa sẵn sàng.");
+        return;
+    }
+
+    // Check if there are any nodes to optimize at all
+    if (allNodesDataForCurrentMap.length === 0) {
+        alert("Không có nút nào trong sơ đồ để tối ưu hóa bố cục.");
+        hideLoadingIndicator();
+        return;
+    }
+
+    showLoadingIndicator("AI đang tối ưu hóa bố cục sơ đồ...");
+
+    let nodesToOptimize = [];
+    let rootNodeForLayout = null;
+
+    if (targetNodeId) {
+        // Optimize a specific branch
+        rootNodeForLayout = allNodesDataForCurrentMap.find(n => n.id === targetNodeId);
+        if (!rootNodeForLayout) {
+            alert("Không tìm thấy nút để tối ưu hóa bố cục.");
+            hideLoadingIndicator();
+            return;
+        }
+        // Collect all nodes in the branch
+        const branchNodeIds = [rootNodeForLayout.id].concat(findAllDescendantNodeIds(rootNodeForLayout.id, allNodesDataForCurrentMap));
+        nodesToOptimize = allNodesDataForCurrentMap.filter(n => branchNodeIds.includes(n.id));
+        console.log("Optimizing branch nodes:", nodesToOptimize.map(n => n.text));
+    } else {
+        // Optimize the entire map
+        nodesToOptimize = [...allNodesDataForCurrentMap];
+        // Find a suitable root if optimizing entire map without a specified target
+        // Prioritize a node with parentId === null, otherwise pick the first node
+        rootNodeForLayout = allNodesDataForCurrentMap.find(n => n.parentId === null);
+        if (!rootNodeForLayout && nodesToOptimize.length > 0) {
+            rootNodeForLayout = nodesToOptimize[0]; // Fallback to first node if no explicit root
+        }
+        console.log("Optimizing entire map. Root node:", rootNodeForLayout?.text);
+    }
+
+    // If after determining the scope, nodesToOptimize is still empty or rootNodeForLayout is null
+    if (nodesToOptimize.length === 0 || !rootNodeForLayout) {
+        alert("Không tìm thấy nút nào phù hợp để tối ưu hóa bố cục. Đảm bảo sơ đồ có ít nhất một nút.");
+        hideLoadingIndicator();
+        return;
+    }
+
+    // Prepare data for layout algorithm: convert to a simpler graph structure
+    const graphNodes = nodesToOptimize.map(node => ({
+        id: node.id,
+        text: node.text,
+        parentId: node.parentId,
+        level: node.level, // Use existing level or calculate if needed
+        width: node.style?.width || DEFAULT_NODE_STYLE.width,
+        height: node.style?.minHeight || DEFAULT_NODE_STYLE.minHeight, // Use minHeight for layout calc
+    }));
+
+    // Symmetrical Hierarchical Layout Algorithm
+    const layoutAlgorithm = (nodes, rootId, initialX, initialY, horizontalSpacing, verticalSpacing) => {
+        const positions = {};
+        const childrenMap = new Map();
+        const nodeDataMap = new Map(nodes.map(node => [node.id, node]));
+
+        nodes.forEach(node => {
+            if (node.parentId) {
+                if (!childrenMap.has(node.parentId)) {
+                    childrenMap.set(node.parentId, []);
+                }
+                childrenMap.get(node.parentId).push(node);
+            }
+        });
+
+        childrenMap.forEach(children => {
+            children.sort((a, b) => a.text.localeCompare(b.text));
+        });
+
+        // Queue for BFS traversal: { id, x, y, level, nodeData, branchSide }
+        // branchSide: 'left' or 'right' relative to the main root
+        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0, nodeData: nodeDataMap.get(rootId), branchSide: 'right' }];
+        const visited = new Set();
+
+        // Track current Y offset for each branch side at each level
+        // This helps stack nodes vertically within their respective branches
+        const levelCurrentY = { 0: { left: initialY, right: initialY } }; 
+        // Track the max X reached on the right side and min X reached on the left side for each level
+        const levelBoundaryX = { 0: { left: initialX, right: initialX + (nodeDataMap.get(rootId)?.width || DEFAULT_NODE_STYLE.width) } };
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (visited.has(current.id)) continue;
+            visited.add(current.id);
+
+            positions[current.id] = { x: current.x, y: current.y };
+
+            const directChildren = childrenMap.get(current.id) || [];
+            const currentNodeWidth = current.nodeData.width || DEFAULT_NODE_STYLE.width;
+            const currentNodeHeight = current.nodeData.height || DEFAULT_NODE_STYLE.minHeight;
+
+            // Calculate total height of children for vertical centering/distribution
+            let childrenTotalHeight = directChildren.reduce((sum, child) => sum + (child.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing, 0) - verticalSpacing;
+            if (childrenTotalHeight < 0) childrenTotalHeight = 0;
+            
+            // Starting Y for children, centered vertically relative to the parent's vertical midpoint
+            let currentChildY = current.y + currentNodeHeight / 2 - childrenTotalHeight / 2;
+
+            directChildren.forEach((child, index) => {
+                const childLevel = current.level + 1;
+                const childNodeWidth = child.width || DEFAULT_NODE_STYLE.width;
+                const childNodeHeight = child.height || DEFAULT_NODE_STYLE.minHeight;
+
+                let newChildX, newChildY;
+                let childBranchSide = current.branchSide; // Children inherit parent's branch side by default
+
+                if (current.level === 0) { // Special handling for direct children of the root (Level 1)
+                    // Alternate sides for level 1 children to create a symmetrical fan-out
+                    childBranchSide = (index % 2 === 0) ? 'right' : 'left';
+
+                    if (childBranchSide === 'right') {
+                        newChildX = current.x + currentNodeWidth + horizontalSpacing;
+                    } else { // 'left'
+                        newChildX = current.x - horizontalSpacing - childNodeWidth;
+                    }
+                    
+                    // Stack children vertically on their respective sides, starting from a calculated Y for that side/level
+                    if (levelCurrentY[childLevel] && levelCurrentY[childLevel][childBranchSide] !== undefined) {
+                        newChildY = levelCurrentY[childLevel][childBranchSide];
+                    } else {
+                        newChildY = currentChildY; // Initial Y for this specific branch side at this level
+                    }
+                    // Update the Y tracker for this branch side and level
+                    levelCurrentY[childLevel] = {
+                        ...levelCurrentY[childLevel],
+                        [childBranchSide]: newChildY + childNodeHeight + verticalSpacing
+                    };
+
+                } else { // Children of non-root nodes (Level 2 and deeper)
+                    // They continue branching out horizontally from their immediate parent
+                    newChildX = current.x + currentNodeWidth + horizontalSpacing;
+                    
+                    // Stack vertically below the current parent
+                    newChildY = current.y + (index * (childNodeHeight + verticalSpacing));
+                }
+                
+                queue.push({ id: child.id, x: newChildX, y: newChildY, level: childLevel, nodeData: child, branchSide: childBranchSide });
+            });
+        }
+        return positions;
+    };
+
+
+    const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
+    const initialY = 50;
+    const horizontalSpacing = 40; // Reduced from 80
+    const verticalSpacing = 40;   // Reduced from 60
+
+    const newPositions = layoutAlgorithm(graphNodes, rootNodeForLayout.id, initialX, initialY, horizontalSpacing, verticalSpacing);
+
+    // Apply updates to Firestore in a batch
+    const batch = writeBatch(db);
+    let updatesCount = 0;
+    nodesToOptimize.forEach(node => {
+        const newPos = newPositions[node.id];
+        if (newPos && (node.position.x !== newPos.x || node.position.y !== newPos.y)) {
+            batch.update(doc(db, "nodes", node.id), { position: newPos });
+            updatesCount++;
+        }
+    });
+
+    try {
+        if (updatesCount > 0) {
+            await batch.commit();
+            alert(`AI đã tối ưu hóa bố cục cho ${updatesCount} nút.`);
+        } else {
+            alert("Không có thay đổi bố cục đáng kể nào được AI đề xuất.");
+        }
+    } catch (error) {
+        console.error("Error optimizing layout:", error);
+        alert("Lỗi khi tối ưu hóa bố cục: " + error.message);
+    } finally {
+        hideLoadingIndicator();
+    }
+}
+
 
 async function handleGenerateMindmapFromText() {
     if (!generativeModel || !db || !currentUser) {
@@ -2201,7 +2388,7 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
 
         if (!mindmapStructureText) {
             alert("AI không thể tạo cấu trúc sơ đồ tư duy từ văn bản này. Vui lòng thử lại với nội dung khác hoặc định dạng rõ ràng hơn.");
-            openAiResponseModal("Phản hồi AI trống", textContent, "AI không tạo ra cấu trúc sơ đồ tư duy. Vui lòng thử lại.");
+            openAiResponseModal("Phản hồi AI trống", textContent, mindmapStructureText);
             return;
         }
 
@@ -2261,16 +2448,32 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
                 const verticalOffset = 70;   // Base vertical offset from parent
 
                 // Simple fan-out: alternate left/right for direct children (level 1)
-                // For deeper levels, just place below and slightly right of parent
-                actualX = parentNodeInfo.x + 50;
-                actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight + 60;
+                // For deeper levels, just offset from parent.
+                if (node.level === 1) {
+                     // Position children of level 0 nodes in a fan-out
+                    const siblings = nodesToCreate.filter(n => n.parentId === node.parentId);
+                    const siblingIndex = siblings.findIndex(s => s.tempId === node.tempId);
 
-                // To avoid direct overlap, check last node at this level
-                if (lastNodePosPerLevel[node.level]) {
-                    const lastNodeInfo = lastNodePosPerLevel[node.level];
-                    // If new node would overlap horizontally, move it to the right
-                    if (actualX < lastNodeInfo.x + lastNodeInfo.width + 20 && actualY < lastNodeInfo.y + lastNodeInfo.height + 20) {
-                        actualX = lastNodeInfo.x + lastNodeInfo.width + 50;
+                    const angleStep = (Math.PI * 0.8) / Math.max(1, siblings.length - 1); // Spread over 180 degrees
+                    const baseAngle = -Math.PI * 0.4; // Start slightly left of vertical
+                    const currentAngle = baseAngle + (siblingIndex * angleStep);
+
+                    const radius = 200; // Distance from parent
+                    actualX = parentNodeInfo.x + parentNodeInfo.style.width / 2 + radius * Math.cos(currentAngle) - nodeStyleBase.width / 2;
+                    actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight / 2 + radius * Math.sin(currentAngle) - nodeStyleBase.minHeight / 2;
+
+                } else {
+                    // For deeper levels, just place below and slightly right of parent
+                    actualX = parentNodeInfo.x + 50;
+                    actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight + 60;
+
+                    // To avoid direct overlap, check last node at this level
+                    if (lastNodePosPerLevel[node.level]) {
+                        const lastNodeInfo = lastNodePosPerLevel[node.level];
+                        // If new node would overlap horizontally, move it to the right
+                        if (actualX < lastNodeInfo.x + lastNodeInfo.width + 20 && actualY < lastNodeInfo.y + lastNodeInfo.height + 20) {
+                            actualX = lastNodeInfo.x + lastNodeInfo.width + 50;
+                        }
                     }
                 }
 
@@ -2570,7 +2773,8 @@ window.addEventListener('DOMContentLoaded', () => {
     ctxAskAiNodeButton = document.getElementById('ctx-ask-ai-node');
     ctxSummarizeBranchButton = document.getElementById('ctx-summarize-branch');
     ctxGenerateActionPlanButton = document.getElementById('ctx-generate-action-plan');
-    ctxGenerateOutlineButton = document.getElementById('ctx-generate-outline'); // NEW: Assign outline button
+    ctxGenerateOutlineButton = document.getElementById('ctx-generate-outline');
+    ctxOptimizeLayoutButton = document.getElementById('ctx-optimize-layout'); // Assign new button
     ctxDeleteNodeButton = document.getElementById('ctx-delete-node');
 
     aiLoadingIndicator = document.getElementById('ai-loading-indicator');
@@ -2584,7 +2788,6 @@ window.addEventListener('DOMContentLoaded', () => {
     nodeContentModalBody = document.getElementById('node-content-modal-body');
     nodeContentModalCloseButton = document.getElementById('node-content-modal-close-button');
 
-    // NEW: Assign Edit Node Text Modal elements
     editNodeTextModalOverlay = document.getElementById('edit-node-text-modal-overlay');
     editNodeTextModalTitle = document.getElementById('edit-node-text-modal-title');
     editNodeTextarea = document.getElementById('edit-node-textarea');
@@ -2617,11 +2820,9 @@ window.addEventListener('DOMContentLoaded', () => {
     mindmapManagementView = document.getElementById('mindmap-management-view');
     newMindmapTitleInput = document.getElementById('new-mindmap-title-input');
     createMindmapButton = document.getElementById('create-mindmap-button');
-    // FIX: Corrected DOM element assignment for normal mind map list
     normalMindmapListUl = document.getElementById('normal-mindmap-list');
     normalMindmapListLoading = document.getElementById('normal-mindmap-list-loading');
 
-    // FIX: Corrected DOM element assignment for AI mind map list
     aiMindmapListUl = document.getElementById('ai-mindmap-list');
     aiMindmapListLoading = document.getElementById('ai-mindmap-list-loading');
 
@@ -2637,12 +2838,10 @@ window.addEventListener('DOMContentLoaded', () => {
     konvaContainer = document.getElementById('konva-container');
     konvaContainerLoading = document.getElementById('konva-container-loading');
 
-    // NEW: Assign AI from Text elements
     aiTextInput = document.getElementById('ai-text-input');
     generateMindmapFromTextButton = document.getElementById('generate-mindmap-from-text-button');
     aiMindmapTitleInput = document.getElementById('ai-mindmap-title-input');
 
-    // NEW: Assign grid control elements
     toggleGridCheckbox = document.getElementById('toggle-grid');
     toggleSnapToGridCheckbox = document.getElementById('toggle-snap-to-grid');
     gridSizeInput = document.getElementById('grid-size-input');
@@ -2654,20 +2853,18 @@ window.addEventListener('DOMContentLoaded', () => {
     if (nodeContentModalCloseButton) { nodeContentModalCloseButton.addEventListener('click', closeNodeContentModal); }
     if (nodeContentModalOverlay) { nodeContentModalOverlay.addEventListener('click', function(event) { if (event.target === nodeContentModalOverlay) closeNodeContentModal(); });}
 
-    // NEW: Event listeners for Edit Node Text Modal
     if (editNodeTextModalSaveButton) { editNodeTextModalSaveButton.addEventListener('click', handleSaveNodeTextFromModal); }
     if (editNodeTextModalCancelButton) { editNodeTextModalCancelButton.addEventListener('click', closeEditNodeModal); }
     if (editNodeTextModalCloseButton) { editNodeTextModalCloseButton.addEventListener('click', closeEditNodeModal); }
-    if (editNodeTextarea) { // Allow Ctrl+Enter to save, Enter for new line
+    if (editNodeTextarea) {
         editNodeTextarea.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && e.ctrlKey) { // Ctrl+Enter to save
+            if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
                 handleSaveNodeTextFromModal();
-            } else if (e.key === 'Escape') { // Allow Esc from textarea to close modal
+            } else if (e.key === 'Escape') {
                 e.preventDefault();
                 closeEditNodeModal();
             }
-            // Default Enter behavior (new line) is allowed if Ctrl is not pressed
         });
     }
 
@@ -2682,10 +2879,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (backToMapsListButton) { backToMapsListButton.addEventListener('click', showMindmapManagementView); }
 
-    // Node Style Panel Listeners
     if (nodeShapeSelect) nodeShapeSelect.addEventListener('change', (e) => handleNodeStyleChange('shape', e.target.value));
     if (nodeFontFamilySelect) nodeFontFamilySelect.addEventListener('change', (e) => handleNodeStyleChange('fontFamily', e.target.value));
-    if (nodeFontSizeInput) nodeFontSizeInput.addEventListener('input', (e) => handleNodeStyleChange('fontSize', e.target.value)); // Use input for live changes
+    if (nodeFontSizeInput) nodeFontSizeInput.addEventListener('input', (e) => handleNodeStyleChange('fontSize', e.target.value));
     if (nodeIconSelect) nodeIconSelect.addEventListener('change', (e) => handleNodeStyleChange('icon', e.target.value));
     if (nodeBgColorInput) nodeBgColorInput.addEventListener('input', (e) => handleNodeStyleChange('backgroundColor', e.target.value));
     if (nodeTextColorInput) nodeTextColorInput.addEventListener('input', (e) => handleNodeStyleChange('textColor', e.target.value));
@@ -2697,31 +2893,29 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (createMindmapButton) { createMindmapButton.addEventListener('click', handleCreateMindmap); }
 
-    // NEW: AI Generate Mindmap from Text Listener
     if (generateMindmapFromTextButton) {
         generateMindmapFromTextButton.addEventListener('click', handleGenerateMindmapFromText);
     }
 
-    // NEW: Grid and Snap-to-Grid Listeners
     if (toggleGridCheckbox) {
         toggleGridCheckbox.addEventListener('change', (e) => {
             isGridVisible = e.target.checked;
             updateGrid();
-            saveCanvasState(); // Save grid visibility state
+            saveCanvasState();
         });
     }
     if (toggleSnapToGridCheckbox) {
         toggleSnapToGridCheckbox.addEventListener('change', (e) => {
             isSnapToGridEnabled = e.target.checked;
-            saveCanvasState(); // Save snap-to-grid state
+            saveCanvasState();
         });
     }
     if (gridSizeInput) {
         gridSizeInput.addEventListener('input', (e) => {
             gridSize = parseInt(e.target.value, 10);
-            if (isNaN(gridSize) || gridSize < 10) gridSize = 10; // Minimum grid size
-            if (isGridVisible) updateGrid(); // Redraw grid if visible
-            saveCanvasState(); // Save grid size
+            if (isNaN(gridSize) || gridSize < 10) gridSize = 10;
+            if (isGridVisible) updateGrid();
+            saveCanvasState();
         });
     }
 
@@ -2742,7 +2936,7 @@ window.addEventListener('DOMContentLoaded', () => {
         ctxEditTextButton.addEventListener('click', () => {
             let targetNode = rightClickedKonvaNode || selectedKonvaNode;
             if (targetNode) {
-                editTextOnKonvaNode(targetNode); // UPDATED call
+                editTextOnKonvaNode(targetNode);
             }
             hideContextMenu();
         });
@@ -2794,10 +2988,9 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (ctxGenerateActionPlanButton) {
-        // FIX: Corrected variable name from ctxGenerateActionPlanPlan to ctxGenerateActionPlanButton
         ctxGenerateActionPlanButton.addEventListener('click', async () => {
             let targetNodeForPlan = rightClickedKonvaNode || selectedKonvaNode;
-            if (!targetNodeForPlan) { // Added check for targetNodeForPlan
+            if (!targetNodeForPlan) {
                 alert("Vui lòng chọn một nút để AI tạo kế hoạch hành động.");
                 hideContextMenu();
                 return;
@@ -2806,10 +2999,10 @@ window.addEventListener('DOMContentLoaded', () => {
             hideContextMenu();
         });
     }
-    if (ctxGenerateOutlineButton) { // NEW: Add event listener for Generate Outline button
-        console.log("Assigning click listener to ctxGenerateOutlineButton."); // Debug log for assignment
+    if (ctxGenerateOutlineButton) {
+        console.log("Assigning click listener to ctxGenerateOutlineButton.");
         ctxGenerateOutlineButton.addEventListener('click', async () => {
-            console.log("ctxGenerateOutlineButton clicked."); // Debug log for click
+            console.log("ctxGenerateOutlineButton clicked.");
             let targetNodeForOutline = rightClickedKonvaNode || selectedKonvaNode;
             if (!targetNodeForOutline) {
                 alert("Vui lòng chọn một nút để AI tạo dàn ý.");
@@ -2820,9 +3013,19 @@ window.addEventListener('DOMContentLoaded', () => {
             hideContextMenu();
         });
     }
+    if (ctxOptimizeLayoutButton) {
+        console.log("Assigning click listener to ctxOptimizeLayoutButton.");
+        ctxOptimizeLayoutButton.addEventListener('click', async () => {
+            console.log("ctxOptimizeLayoutButton clicked.");
+            let targetNodeForLayout = rightClickedKonvaNode || selectedKonvaNode;
+            // If no node is selected, optimize the entire map. Otherwise, optimize the branch.
+            await optimizeLayoutWithAI(targetNodeForLayout ? targetNodeForLayout.id() : null);
+            hideContextMenu();
+        });
+    }
     if (ctxDeleteNodeButton) {
         ctxDeleteNodeButton.addEventListener('click', async () => {
-            console.log("Delete Node button clicked in context menu."); // Debug log
+            console.log("Delete Node button clicked in context menu.");
             let targetNode = rightClickedKonvaNode || selectedKonvaNode;
             if (!targetNode || !currentMindMapId || !db) {
                  alert("Không thể xóa nút. Vui lòng thử lại."); hideContextMenu(); return;
@@ -2836,7 +3039,6 @@ window.addEventListener('DOMContentLoaded', () => {
     // Global click listener to hide context menu if clicked outside
     document.addEventListener('click', function (e) {
         if (contextMenu && !contextMenu.classList.contains('hidden')) {
-            // Check if the click is outside the context menu and not on a Konva node (which might open it again)
             if (!contextMenu.contains(e.target) && e.target !== currentKonvaStage && !e.target.hasName?.('mindmapNodeGroup') && !e.target.getParent?.()?.hasName?.('mindmapNodeGroup')) {
                  hideContextMenu();
             }
