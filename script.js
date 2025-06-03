@@ -2613,6 +2613,7 @@ async function addChildNodeLogic(parentNode) {
         alert("Lỗi khi thêm nút con: " + e.message);
     }
 }
+// Helper function to find all descendant node IDs
 function findAllDescendantNodeIds(parentNodeId, allNodes) {
     let descendantIds = [];
     const directChildren = allNodes.filter(node => node.parentId === parentNodeId);
