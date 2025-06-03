@@ -1852,7 +1852,6 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -2230,57 +2229,68 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
             children.sort((a, b) => a.text.localeCompare(b.text));
         });
 
-        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0 }];
+        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0, nodeData: nodes.find(n => n.id === rootId) }]; // FIX: Pass nodeData for root
         const visited = new Set();
-        let currentLevelY = { 0: initialY }; // Tracks Y position for each level
-        let currentLevelMaxX = { 0: initialX + (nodes.find(n => n.id === rootId)?.width || DEFAULT_NODE_STYLE.width) / 2 }; // Tracks max X for each level
+        
+        // Track the current Y offset for each level to stack nodes vertically
+        const levelCurrentY = { 0: initialY }; 
+        // Track the maximum X reached at each level to place subsequent nodes
+        const levelMaxX = {}; 
 
         while (queue.length > 0) {
             const current = queue.shift();
             if (visited.has(current.id)) continue;
             visited.add(current.id);
 
-            positions[current.id] = { x: current.x, y: current.y };
+            positions[current.id] = { x: current.x, y: current.y }; // Store position for current node
 
             const directChildren = childrenMap.get(current.id) || [];
-            let childStartX = current.x - (directChildren.length - 1) * (horizontalSpacing + DEFAULT_NODE_STYLE.width) / 2; // Center children under parent
+            const currentNodeWidth = current.nodeData.width || DEFAULT_NODE_STYLE.width;
+            const currentNodeHeight = current.nodeData.height || DEFAULT_NODE_STYLE.minHeight;
+
+            // Calculate starting Y for children to center them vertically around the parent's mid-point
+            // This is crucial for the vertical spread of main branches (level 1)
+            let childrenTotalHeight = directChildren.reduce((sum, child) => sum + (child.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing, 0) - verticalSpacing;
+            if (childrenTotalHeight < 0) childrenTotalHeight = 0; // Handle case with no children
+            
+            let currentChildY = current.y + currentNodeHeight / 2 - childrenTotalHeight / 2;
 
             directChildren.forEach((child, index) => {
                 const childLevel = current.level + 1;
-                const childY = (currentLevelY[childLevel] || (current.y + (nodes.find(n => n.id === current.id)?.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing));
-                
-                let childX = childStartX + index * (DEFAULT_NODE_STYLE.width + horizontalSpacing);
+                const childNodeWidth = child.width || DEFAULT_NODE_STYLE.width;
+                const childNodeHeight = child.height || DEFAULT_NODE_STYLE.minHeight;
 
-                // Adjust X to avoid overlap with previous nodes on the same level
-                if (currentLevelMaxX[childLevel] && childX < currentLevelMaxX[childLevel] + horizontalSpacing) {
-                    childX = currentLevelMaxX[childLevel] + horizontalSpacing;
+                let newChildX, newChildY;
+
+                if (current.level === 0) { // Children of the main root node (Level 1)
+                    newChildX = current.x + currentNodeWidth + horizontalSpacing;
+                    newChildY = currentChildY + index * (childNodeHeight + verticalSpacing);
+                    
+                } else { // Children of other nodes (Level 2+) - Branch out horizontally from parent
+                    newChildX = current.x + currentNodeWidth + horizontalSpacing;
+                    newChildY = current.y + (index * (childNodeHeight + verticalSpacing)); // Stack vertically below parent
+
+                    // Ensure horizontal spacing for children of same parent
+                    // This is more about ensuring they don't overlap horizontally if multiple children
+                    // from different parents end up at similar Y levels.
+                    // For this specific layout, direct horizontal stacking from parent is key.
                 }
-
-                queue.push({ id: child.id, x: childX, y: childY, level: childLevel });
-                currentLevelY[childLevel] = childY;
-                currentLevelMaxX[childLevel] = childX + DEFAULT_NODE_STYLE.width;
+                
+                positions[child.id] = { x: newChildX, y: newChildY };
+                queue.push({ id: child.id, x: newChildX, y: newChildY, level: childLevel, nodeData: child });
             });
         }
         return positions;
     };
 
-    // Find the actual root node for the layout
-    let layoutRootId = rootNodeForLayout.id;
-    
-    // No need for this check anymore, as it's handled above
-    // if (!layoutRootId) {
-    //     alert("Không tìm thấy node gốc để tối ưu hóa bố cục.");
-    //     hideLoadingIndicator();
-    //     return;
-    // }
-
 
     const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
     const initialY = 50;
-    const horizontalSpacing = 80;
-    const verticalSpacing = 60;
+    // FIX: Reduced horizontal and vertical spacing for a more compact layout
+    const horizontalSpacing = 40; // Reduced from 80
+    const verticalSpacing = 40;   // Reduced from 60
 
-    const newPositions = layoutAlgorithm(graphNodes, layoutRootId, initialX, initialY, horizontalSpacing, verticalSpacing);
+    const newPositions = layoutAlgorithm(graphNodes, rootNodeForLayout.id, initialX, initialY, horizontalSpacing, verticalSpacing); // FIX: Pass rootNodeForLayout.id
 
     // Apply updates to Firestore in a batch
     const batch = writeBatch(db);
@@ -2360,7 +2370,7 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
 
         if (!mindmapStructureText) {
             alert("AI không thể tạo cấu trúc sơ đồ tư duy từ văn bản này. Vui lòng thử lại với nội dung khác hoặc định dạng rõ ràng hơn.");
-            openAiResponseModal("Phản hồi AI trống", textContent, "AI không tạo ra cấu trúc sơ đồ tư duy. Vui lòng thử lại.");
+            openAiResponseModal("Phản hồi AI trống", textContent, mindmapStructureText);
             return;
         }
 
