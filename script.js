@@ -948,7 +948,7 @@ function initKonvaStage() {
         }
 
         let hitShape = e_context.target;
-        let determinedTargetNodeGroup = null; // FIX: Declare determinedTargetNodeGroup with let
+        let determinedTargetNodeGroup = null;
 
         // Traverse up to find the 'mindmapNodeGroup'
         let currentShape = hitShape;
@@ -964,7 +964,7 @@ function initKonvaStage() {
         }
 
         if (determinedTargetNodeGroup) { // A mindmap node was right-clicked
-            rightClickedKonvaNode = determinedTargetNodeGroup; // FIX: Use determinedTargetNodeGroup
+            rightClickedKonvaNode = determinedTargetNodeGroup;
             // Select the node if not already selected
             if (!selectedKonvaNode || selectedKonvaNode.id() !== rightClickedKonvaNode.id()) {
                 if (selectedKonvaNode) { selectedKonvaNode.findOne('.nodeShape')?.strokeWidth(1); removeCreationHandle(selectedKonvaNode); }
@@ -1697,7 +1697,6 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
         let userMessage = "Lỗi khi AI gợi ý nút con: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         alert(userMessage);
@@ -1810,7 +1809,6 @@ async function generateExamplesWithAI(targetNodeKonva) {
         let userMessage = "Lỗi khi AI tạo ví dụ: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         alert(userMessage);
@@ -1854,7 +1852,6 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -2057,6 +2054,7 @@ Vui lòng trình bày toàn bộ kế hoạch dưới dạng một khối văn b
 }
 
 async function generateOutlineWithAI(targetNodeKonva) {
+    console.log("Attempting to generate outline with AI for node:", targetNodeKonva.id()); // Debug log
     if (!generativeModel || !targetNodeKonva || !currentMindMapId || !currentUser || !db) {
         alert("Chức năng AI chưa sẵn sàng hoặc không có nút nào được chọn.");
         hideContextMenu(); return;
@@ -2263,32 +2261,16 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
                 const verticalOffset = 70;   // Base vertical offset from parent
 
                 // Simple fan-out: alternate left/right for direct children (level 1)
-                // For deeper levels, just offset from parent.
-                if (node.level === 1) {
-                     // Position children of level 0 nodes in a fan-out
-                    const siblings = nodesToCreate.filter(n => n.parentId === node.parentId);
-                    const siblingIndex = siblings.findIndex(s => s.tempId === node.tempId);
+                // For deeper levels, just place below and slightly right of parent
+                actualX = parentNodeInfo.x + 50;
+                actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight + 60;
 
-                    const angleStep = (Math.PI * 0.8) / Math.max(1, siblings.length - 1); // Spread over 180 degrees
-                    const baseAngle = -Math.PI * 0.4; // Start slightly left of vertical
-                    const currentAngle = baseAngle + (siblingIndex * angleStep);
-
-                    const radius = 200; // Distance from parent
-                    actualX = parentNodeInfo.x + parentNodeInfo.style.width / 2 + radius * Math.cos(currentAngle) - nodeStyleBase.width / 2;
-                    actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight / 2 + radius * Math.sin(currentAngle) - nodeStyleBase.minHeight / 2;
-
-                } else {
-                    // For deeper levels, just place below and slightly right of parent
-                    actualX = parentNodeInfo.x + 50;
-                    actualY = parentNodeInfo.y + parentNodeInfo.style.minHeight + 60;
-
-                    // To avoid direct overlap, check last node at this level
-                    if (lastNodePosPerLevel[node.level]) {
-                        const lastNodeInfo = lastNodePosPerLevel[node.level];
-                        // If new node would overlap horizontally, move it to the right
-                        if (actualX < lastNodeInfo.x + lastNodeInfo.width + 20 && actualY < lastNodeInfo.y + lastNodeInfo.height + 20) {
-                            actualX = lastNodeInfo.x + lastNodeInfo.width + 50;
-                        }
+                // To avoid direct overlap, check last node at this level
+                if (lastNodePosPerLevel[node.level]) {
+                    const lastNodeInfo = lastNodePosPerLevel[node.level];
+                    // If new node would overlap horizontally, move it to the right
+                    if (actualX < lastNodeInfo.x + lastNodeInfo.width + 20 && actualY < lastNodeInfo.y + lastNodeInfo.height + 20) {
+                        actualX = lastNodeInfo.x + lastNodeInfo.width + 50;
                     }
                 }
 
@@ -2825,7 +2807,9 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (ctxGenerateOutlineButton) { // NEW: Add event listener for Generate Outline button
+        console.log("Assigning click listener to ctxGenerateOutlineButton."); // Debug log for assignment
         ctxGenerateOutlineButton.addEventListener('click', async () => {
+            console.log("ctxGenerateOutlineButton clicked."); // Debug log for click
             let targetNodeForOutline = rightClickedKonvaNode || selectedKonvaNode;
             if (!targetNodeForOutline) {
                 alert("Vui lòng chọn một nút để AI tạo dàn ý.");
