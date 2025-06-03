@@ -95,7 +95,7 @@ let gridLines = []; // To store Konva Line objects for the grid
 
 // --- DOM ELEMENT VARIABLES ---
 let nodeStylePanel, nodeShapeSelect, nodeFontFamilySelect, nodeFontSizeInput, nodeIconSelect, nodeBgColorInput, nodeTextColorInput, nodeBorderColorInput, nodeLineColorInput, nodeLineDashSelect, nodeLineWidthInput;
-let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton;
+let contextMenu, ctxAddChildButton, ctxEditTextButton, ctxViewFullContentButton, ctxSuggestChildrenButton, ctxExpandNodeButton, ctxGenerateExamplesButton, ctxAskAiNodeButton, ctxSummarizeBranchButton, ctxGenerateActionPlanButton, ctxDeleteNodeButton, ctxGenerateOutlineButton; // NEW: ctxGenerateOutlineButton
 let aiLoadingIndicator, aiResponseModalOverlay, aiResponseModalTitle, aiResponseModalBody, aiResponseModalCloseButton;
 let nodeContentModalOverlay, nodeContentModalTitle, nodeContentModalBody, nodeContentModalCloseButton;
 let editNodeTextModalOverlay, editNodeTextModalTitle, editNodeTextarea, editNodeTextModalSaveButton, editNodeTextModalCancelButton, editNodeTextModalCloseButton; // NEW modal elements
@@ -1329,7 +1329,7 @@ function renderNodesAndLines(nodesData) {
 
             // Hide context menu if a primary click occurs outside of it
             if (isPrimaryInteraction && contextMenu && !contextMenu.classList.contains('hidden')) {
-                if (!contextMenu.contains(e.evt.target)) { // If click is outside context menu
+                if (!contextMenu.contains(e.target)) { // If click is outside context menu
                      hideContextMenu();
                 }
             }
@@ -1794,7 +1794,7 @@ async function generateExamplesWithAI(targetNodeKonva) {
                     mapId: currentMindMapId,
                     parentId: targetNodeId,
                     text: `Ví dụ: ${suggestion}`, // FIX: Changed 'example' to 'suggestion'
-                    position: { x: startX, y: startY + (index * yOffsetIncrement) },
+                    position: { x: startX + (index * 10), y: startY + (index * yOffsetIncrement) }, // Stagger positions slightly
                     style: exampleNodeStyle,
                     createdAt: serverTimestamp()
                 };
@@ -1960,7 +1960,6 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         let userMessage = "Lỗi khi AI tóm tắt nhánh: " + error.message;
          if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
@@ -2082,7 +2081,7 @@ Sơ đồ tư duy cần được cấu trúc theo định dạng Markdown đư�
 - Tránh lặp lại nội dung giống hệt nhau.
 - Tập trung vào việc tạo ra một cấu trúc logic và dễ hiểu.
 - Không bao gồm bất kỳ văn bản giới thiệu hay kết luận nào ngoài cấu trúc sơ đồ tư duy.
-- Không đánh số, chỉ dùng dấu gạch ngang.
+- Không đánh số, chỉ dùng dấu gạch đầu dòng.
 
 Ví dụ định dạng đầu ra mong muốn:
 - Nút gốc của sơ đồ tư duy
@@ -2281,7 +2280,6 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
         let userMessage = "Lỗi khi AI tạo sơ đồ từ văn bản: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung. Văn bản đầu vào có thể chứa từ khóa nhạy cảm.";}
         openAiResponseModal("Lỗi AI Tạo Sơ đồ", textContent, userMessage);
@@ -2495,6 +2493,7 @@ window.addEventListener('DOMContentLoaded', () => {
     ctxSummarizeBranchButton = document.getElementById('ctx-summarize-branch');
     ctxGenerateActionPlanButton = document.getElementById('ctx-generate-action-plan');
     ctxDeleteNodeButton = document.getElementById('ctx-delete-node');
+    ctxGenerateOutlineButton = document.getElementById('ctx-generate-outline'); // NEW: Assign outline button
 
     aiLoadingIndicator = document.getElementById('ai-loading-indicator');
     aiResponseModalOverlay = document.getElementById('ai-response-modal-overlay');
@@ -2726,6 +2725,18 @@ window.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             await generateActionPlanWithAI(targetNodeForPlan);
+            hideContextMenu();
+        });
+    }
+    if (ctxGenerateOutlineButton) { // NEW: Add event listener for Generate Outline button
+        ctxGenerateOutlineButton.addEventListener('click', async () => {
+            let targetNodeForOutline = rightClickedKonvaNode || selectedKonvaNode;
+            if (!targetNodeForOutline) {
+                alert("Vui lòng chọn một nút để AI tạo dàn ý.");
+                hideContextMenu();
+                return;
+            }
+            await generateOutlineWithAI(targetNodeForOutline);
             hideContextMenu();
         });
     }
