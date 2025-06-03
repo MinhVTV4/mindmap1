@@ -2617,15 +2617,7 @@ async function addChildNodeLogic(parentNode) {
         alert("Lỗi khi thêm nút con: " + e.message);
     }
 }
-function findAllDescendantNodeIds(parentNodeId, allNodes) {
-    let descendantIds = [];
-    const directChildren = allNodes.filter(node => node.parentId === parentNodeId);
-    for (const child of directChildren) {
-        descendantIds.push(child.id);
-        descendantIds = descendantIds.concat(findAllDescendantNodeIds(child.id, allNodes)); // Recursively find children of children
-    }
-    return descendantIds;
-}
+
 async function deleteNodeLogic(nodeToDelete) {
     if (!nodeToDelete || !currentMindMapId || !db) return;
     const nodeId = nodeToDelete.id();
