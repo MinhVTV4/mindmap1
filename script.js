@@ -1162,11 +1162,10 @@ function renderNodesAndLines(nodesData) {
         // Calculate shape height based on text, minHeight, and "Read more" indicator
         let shapeRenderHeight = Math.max(style.minHeight, textDisplayHeight + (2 * style.padding));
 
-        if (isTextTruncated) {
-            const readMoreIndicatorHeight = estimatedLineHeight * 0.8; // Approximate height for "Xem thêm"
-            // Ensure shape is tall enough for text + padding + "Read more"
-            shapeRenderHeight = Math.max(shapeRenderHeight, textDisplayHeight + (2 * style.padding) + readMoreIndicatorHeight + style.padding * 0.5);
-        }
+        // Store rendered height for layout calculations
+        nodeData.renderedWidth = style.width; // Store actual rendered width
+        nodeData.renderedHeight = shapeRenderHeight; // Store actual rendered height
+
 
         // Create Konva Group for the node
         const group = new Konva.Group({
@@ -1366,10 +1365,10 @@ function renderNodesAndLines(nodesData) {
                 return;
             }
 
-            const parentActualHeight = parentRenderedShape.height();
-            const childActualHeight = childRenderedShape.height();
             const parentActualWidth = parentRenderedShape.width();
             const childActualWidth = childRenderedShape.width();
+            const parentActualHeight = parentRenderedShape.height();
+            const childActualHeight = childRenderedShape.height();
 
             const parentStyle = { ...DEFAULT_NODE_STYLE, ...(parentNodeFromData?.style || {}) }; // Use parent's line style
 
@@ -1667,8 +1666,8 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
             let startX = targetNodeKonva.x();
             let startY = targetNodeKonva.y();
             const parentShape = targetNodeKonva.findOne('.nodeShape');
-            const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
-            const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
+            const parentWidth = parentShape?.width || DEFAULT_NODE_STYLE.width; // Use .width directly
+            const parentHeight = parentShape?.height || DEFAULT_NODE_STYLE.minHeight; // Use .height directly
 
             // Position new nodes below and slightly offset from parent
             startX += parentWidth / 4; // Offset a bit to the right
@@ -1779,8 +1778,8 @@ async function generateExamplesWithAI(targetNodeKonva) {
             let startX = targetNodeKonva.x();
             let startY = targetNodeKonva.y();
             const parentShape = targetNodeKonva.findOne('.nodeShape');
-            const parentWidth = parentShape?.width() || DEFAULT_NODE_STYLE.width;
-            const parentHeight = parentShape?.height() || DEFAULT_NODE_STYLE.minHeight;
+            const parentWidth = parentShape?.width || DEFAULT_NODE_STYLE.width;
+            const parentHeight = parentShape?.height || DEFAULT_NODE_STYLE.minHeight;
 
             startX += parentWidth / 4; // Offset a bit to the right
             startY += parentHeight + 30; // Below the parent
@@ -1852,6 +1851,7 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -2237,7 +2237,7 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         // Track current Y offset for each branch side at each level
         // This helps stack nodes vertically within their respective branches
         const levelCurrentY = { 0: { left: initialY, right: initialY } }; 
-        // Track the max X reached on the right side and min X reached on the left side for each level
+        // Track the maximum X reached on the right side and minimum X reached on the left side for each level
         const levelBoundaryX = { 0: { left: initialX, right: initialX + (nodeDataMap.get(rootId)?.width || DEFAULT_NODE_STYLE.width) } };
 
         while (queue.length > 0) {
