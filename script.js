@@ -816,7 +816,7 @@ function initKonvaStage() {
             if (lastDist > 0) { // Only zoom if a previous distance was recorded (i.e., pinch has started)
                 const pointTo = { // Calculate mouse pointer position relative to the stage
                     x: (currentCenter.x - currentKonvaStage.x()) / currentKonvaStage.scaleX(),
-                    y: (currentCenter.y - currentKonvaStage.y()) / currentKonvaStage.scaleX(),
+                    y: (currentCenter.y - currentKonvaStage.y()) / currentKonvaStage.scaleY(),
                 };
 
                 const newScale = currentKonvaStage.scaleX() * (currentDist / lastDist); // Calculate new scale
@@ -1852,6 +1852,7 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -2157,6 +2158,13 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         return;
     }
 
+    // FIX: Check if there are any nodes to optimize at all
+    if (allNodesDataForCurrentMap.length === 0) {
+        alert("Không có nút nào trong sơ đồ để tối ưu hóa bố cục.");
+        hideLoadingIndicator();
+        return;
+    }
+
     showLoadingIndicator("AI đang tối ưu hóa bố cục sơ đồ...");
 
     let nodesToOptimize = [];
@@ -2178,15 +2186,17 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         // Optimize the entire map
         nodesToOptimize = [...allNodesDataForCurrentMap];
         // Find a suitable root if optimizing entire map without a specified target
-        rootNodeForLayout = allNodesDataForCurrentMap.find(n => n.parentId === null) || nodesToOptimize[0];
+        // Prioritize a node with parentId === null, otherwise pick the first node
+        rootNodeForLayout = allNodesDataForCurrentMap.find(n => n.parentId === null);
         if (!rootNodeForLayout && nodesToOptimize.length > 0) {
             rootNodeForLayout = nodesToOptimize[0]; // Fallback to first node if no explicit root
         }
         console.log("Optimizing entire map. Root node:", rootNodeForLayout?.text);
     }
 
-    if (nodesToOptimize.length === 0) {
-        alert("Không có nút nào để tối ưu hóa bố cục.");
+    // FIX: If after determining the scope, nodesToOptimize is still empty or rootNodeForLayout is null
+    if (nodesToOptimize.length === 0 || !rootNodeForLayout) {
+        alert("Không tìm thấy nút nào phù hợp để tối ưu hóa bố cục. Đảm bảo sơ đồ có ít nhất một nút.");
         hideLoadingIndicator();
         return;
     }
@@ -2256,21 +2266,13 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
 
     // Find the actual root node for the layout
     let layoutRootId = rootNodeForLayout.id;
-    if (!layoutRootId && nodesToOptimize.length > 0) {
-        // If no explicit root found, find the highest-level node without a parent in the selection
-        const potentialRoots = nodesToOptimize.filter(n => !nodesToOptimize.some(p => p.id === n.parentId));
-        if (potentialRoots.length > 0) {
-            layoutRootId = potentialRoots[0].id; // Just pick the first one
-        } else {
-            layoutRootId = nodesToOptimize[0].id; // Fallback to first node if no clear root
-        }
-    }
     
-    if (!layoutRootId) {
-        alert("Không tìm thấy node gốc để tối ưu hóa bố cục.");
-        hideLoadingIndicator();
-        return;
-    }
+    // No need for this check anymore, as it's handled above
+    // if (!layoutRootId) {
+    //     alert("Không tìm thấy node gốc để tối ưu hóa bố cục.");
+    //     hideLoadingIndicator();
+    //     return;
+    // }
 
 
     const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
