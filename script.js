@@ -780,8 +780,8 @@ function initKonvaStage() {
                             }
                             // Show context menu at touch position
                             if (contextMenu && touchStartPointerPositionForContextMenu) {
-                                contextMenu.style.top = e_context.evt.pageY + 'px'; // FIX: Use e_context.evt.pageY/X for Konva contextmenu
-                                contextMenu.style.left = e_context.evt.pageX + 'px';
+                                contextMenu.style.top = touchStartPointerPositionForContextMenu.y + 'px';
+                                contextMenu.style.left = touchStartPointerPositionForContextMenu.x + 'px';
                                 showElement(contextMenu);
                                 contextMenuJustOpened = true;
                             }
@@ -1852,6 +1852,7 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -1946,7 +1947,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
             alert(`AI đã tạo một nút tóm tắt con cho nhánh "${rootNodeTextPreview}".`);
 
         } else {
-            openAiResponseModal(
+             openAiResponseModal(
                 `AI Tóm tắt nhánh: "${rootNodeTextPreview}"`,
                 truncatedContent, // Show what was sent to AI
                 "AI không thể tạo tóm tắt cho nhánh này vào lúc này. Vui lòng thử lại hoặc kiểm tra nội dung nhánh."
@@ -2157,7 +2158,7 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         return;
     }
 
-    // Check if there are any nodes to optimize at all
+    // FIX: Check if there are any nodes to optimize at all
     if (allNodesDataForCurrentMap.length === 0) {
         alert("Không có nút nào trong sơ đồ để tối ưu hóa bố cục.");
         hideLoadingIndicator();
@@ -2193,7 +2194,7 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         console.log("Optimizing entire map. Root node:", rootNodeForLayout?.text);
     }
 
-    // If after determining the scope, nodesToOptimize is still empty or rootNodeForLayout is null
+    // FIX: If after determining the scope, nodesToOptimize is still empty or rootNodeForLayout is null
     if (nodesToOptimize.length === 0 || !rootNodeForLayout) {
         alert("Không tìm thấy nút nào phù hợp để tối ưu hóa bố cục. Đảm bảo sơ đồ có ít nhất một nút.");
         hideLoadingIndicator();
@@ -2210,12 +2211,11 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         height: node.style?.minHeight || DEFAULT_NODE_STYLE.minHeight, // Use minHeight for layout calc
     }));
 
-    // Symmetrical Hierarchical Layout Algorithm
+    // Simple hierarchical layout algorithm (for demonstration)
+    // This is a basic implementation and can be replaced with more sophisticated algorithms
     const layoutAlgorithm = (nodes, rootId, initialX, initialY, horizontalSpacing, verticalSpacing) => {
         const positions = {};
         const childrenMap = new Map();
-        const nodeDataMap = new Map(nodes.map(node => [node.id, node]));
-
         nodes.forEach(node => {
             if (node.parentId) {
                 if (!childrenMap.has(node.parentId)) {
@@ -2225,20 +2225,15 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
             }
         });
 
+        // Sort children for consistent layout
         childrenMap.forEach(children => {
             children.sort((a, b) => a.text.localeCompare(b.text));
         });
 
-        // Queue for BFS traversal: { id, x, y, level, nodeData, branchSide }
-        // branchSide: 'left' or 'right' relative to the main root
-        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0, nodeData: nodeDataMap.get(rootId), branchSide: 'right' }];
+        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0 }];
         const visited = new Set();
-
-        // Track current Y offset for each branch side at each level
-        // This helps stack nodes vertically within their respective branches
-        const levelCurrentY = { 0: { left: initialY, right: initialY } }; 
-        // Track the max X reached on the right side and min X reached on the left side for each level
-        const levelBoundaryX = { 0: { left: initialX, right: initialX + (nodeDataMap.get(rootId)?.width || DEFAULT_NODE_STYLE.width) } };
+        let currentLevelY = { 0: initialY }; // Tracks Y position for each level
+        let currentLevelMaxX = { 0: initialX + (nodes.find(n => n.id === rootId)?.width || DEFAULT_NODE_STYLE.width) / 2 }; // Tracks max X for each level
 
         while (queue.length > 0) {
             const current = queue.shift();
@@ -2248,67 +2243,44 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
             positions[current.id] = { x: current.x, y: current.y };
 
             const directChildren = childrenMap.get(current.id) || [];
-            const currentNodeWidth = current.nodeData.width || DEFAULT_NODE_STYLE.width;
-            const currentNodeHeight = current.nodeData.height || DEFAULT_NODE_STYLE.minHeight;
-
-            // Calculate total height of children for vertical centering/distribution
-            let childrenTotalHeight = directChildren.reduce((sum, child) => sum + (child.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing, 0) - verticalSpacing;
-            if (childrenTotalHeight < 0) childrenTotalHeight = 0;
-            
-            // Starting Y for children, centered vertically relative to the parent's vertical midpoint
-            let currentChildY = current.y + currentNodeHeight / 2 - childrenTotalHeight / 2;
+            let childStartX = current.x - (directChildren.length - 1) * (horizontalSpacing + DEFAULT_NODE_STYLE.width) / 2; // Center children under parent
 
             directChildren.forEach((child, index) => {
                 const childLevel = current.level + 1;
-                const childNodeWidth = child.width || DEFAULT_NODE_STYLE.width;
-                const childNodeHeight = child.height || DEFAULT_NODE_STYLE.minHeight;
-
-                let newChildX, newChildY;
-                let childBranchSide = current.branchSide; // Children inherit parent's branch side by default
-
-                if (current.level === 0) { // Special handling for direct children of the root (Level 1)
-                    // Alternate sides for level 1 children to create a symmetrical fan-out
-                    childBranchSide = (index % 2 === 0) ? 'right' : 'left';
-
-                    if (childBranchSide === 'right') {
-                        newChildX = current.x + currentNodeWidth + horizontalSpacing;
-                    } else { // 'left'
-                        newChildX = current.x - horizontalSpacing - childNodeWidth;
-                    }
-                    
-                    // Stack children vertically on their respective sides, starting from a calculated Y for that side/level
-                    if (levelCurrentY[childLevel] && levelCurrentY[childLevel][childBranchSide] !== undefined) {
-                        newChildY = levelCurrentY[childLevel][childBranchSide];
-                    } else {
-                        newChildY = currentChildY; // Initial Y for this specific branch side at this level
-                    }
-                    // Update the Y tracker for this branch side and level
-                    levelCurrentY[childLevel] = {
-                        ...levelCurrentY[childLevel],
-                        [childBranchSide]: newChildY + childNodeHeight + verticalSpacing
-                    };
-
-                } else { // Children of non-root nodes (Level 2 and deeper)
-                    // They continue branching out horizontally from their immediate parent
-                    newChildX = current.x + currentNodeWidth + horizontalSpacing;
-                    
-                    // Stack vertically below the current parent
-                    newChildY = current.y + (index * (childNodeHeight + verticalSpacing));
-                }
+                const childY = (currentLevelY[childLevel] || (current.y + (nodes.find(n => n.id === current.id)?.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing));
                 
-                queue.push({ id: child.id, x: newChildX, y: newChildY, level: childLevel, nodeData: child, branchSide: childBranchSide });
+                let childX = childStartX + index * (DEFAULT_NODE_STYLE.width + horizontalSpacing);
+
+                // Adjust X to avoid overlap with previous nodes on the same level
+                if (currentLevelMaxX[childLevel] && childX < currentLevelMaxX[childLevel] + horizontalSpacing) {
+                    childX = currentLevelMaxX[childLevel] + horizontalSpacing;
+                }
+
+                queue.push({ id: child.id, x: childX, y: childY, level: childLevel });
+                currentLevelY[childLevel] = childY;
+                currentLevelMaxX[childLevel] = childX + DEFAULT_NODE_STYLE.width;
             });
         }
         return positions;
     };
 
+    // Find the actual root node for the layout
+    let layoutRootId = rootNodeForLayout.id;
+    
+    // No need for this check anymore, as it's handled above
+    // if (!layoutRootId) {
+    //     alert("Không tìm thấy node gốc để tối ưu hóa bố cục.");
+    //     hideLoadingIndicator();
+    //     return;
+    // }
+
 
     const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
     const initialY = 50;
-    const horizontalSpacing = 40; // Reduced from 80
-    const verticalSpacing = 40;   // Reduced from 60
+    const horizontalSpacing = 80;
+    const verticalSpacing = 60;
 
-    const newPositions = layoutAlgorithm(graphNodes, rootNodeForLayout.id, initialX, initialY, horizontalSpacing, verticalSpacing);
+    const newPositions = layoutAlgorithm(graphNodes, layoutRootId, initialX, initialY, horizontalSpacing, verticalSpacing);
 
     // Apply updates to Firestore in a batch
     const batch = writeBatch(db);
@@ -2388,7 +2360,7 @@ Hãy bắt đầu sơ đồ tư duy của bạn:`;
 
         if (!mindmapStructureText) {
             alert("AI không thể tạo cấu trúc sơ đồ tư duy từ văn bản này. Vui lòng thử lại với nội dung khác hoặc định dạng rõ ràng hơn.");
-            openAiResponseModal("Phản hồi AI trống", textContent, mindmapStructureText);
+            openAiResponseModal("Phản hồi AI trống", textContent, "AI không tạo ra cấu trúc sơ đồ tư duy. Vui lòng thử lại.");
             return;
         }
 
