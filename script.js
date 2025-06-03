@@ -1300,7 +1300,7 @@ function renderNodesAndLines(nodesData) {
             if (e.target.name() === 'readMoreIndicator') return; // Handled by its own listener
             if (this.isDragging && this.isDragging()) { return; } // Don't select if it was a drag operation
 
-            const isPrimaryInteraction = (e.evt.button === 0 && e.type === 'click') || e.type === 'tap';
+            const isPrimaryInteraction = (ev.evt.button === 0 && ev.type === 'click') || ev.type === 'tap';
 
             if (isPrimaryInteraction) {
                 if (contextMenuJustOpened) { // If context menu was just opened by this click/tap (e.g., long press)
@@ -1852,7 +1852,6 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
-        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -2179,7 +2178,7 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
             return;
         }
         // Collect all nodes in the branch
-        const branchNodeIds = [rootNodeId].concat(findAllDescendantNodeIds(rootNodeId, allNodesDataForCurrentMap));
+        const branchNodeIds = [rootNodeForLayout.id].concat(findAllDescendantNodeIds(rootNodeForLayout.id, allNodesDataForCurrentMap)); // FIX: Use rootNodeForLayout.id
         nodesToOptimize = allNodesDataForCurrentMap.filter(n => branchNodeIds.includes(n.id));
         console.log("Optimizing branch nodes:", nodesToOptimize.map(n => n.text));
     } else {
