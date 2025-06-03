@@ -172,15 +172,9 @@ function openNodeContentModal(nodeTitle, fullContent) {
         copyButton.textContent = '📋 Sao chép nội dung';
         copyButton.className = 'secondary'; // Use secondary style
         copyButton.onclick = () => {
-            navigator.clipboard.writeText(fullContent)
-                .then(() => {
-                    copyButton.textContent = '✅ Đã sao chép!';
-                    setTimeout(() => copyButton.textContent = '📋 Sao chép nội dung', 2000);
-                })
-                .catch(err => {
-                    console.error('Failed to copy text: ', err);
-                    alert('Lỗi khi sao chép nội dung.');
-                });
+            document.execCommand('copy'); // Use document.execCommand for clipboard operations in iframes
+            copyButton.textContent = '✅ Đã sao chép!';
+            setTimeout(() => copyButton.textContent = '📋 Sao chép nội dung', 2000);
         };
         modalFooter.prepend(copyButton); // Add to the left of existing close button in footer
 
@@ -659,7 +653,7 @@ async function deleteMindMap(mapId) {
         // The onSnapshot listener for mind maps will automatically update the list
     } catch (error) {
         console.error("Error deleting mind map: ", error);
-        alert("Lỗi khi xóa sơ đồ: " + e.message);
+        alert("Lỗi khi xóa sơ đồ: " + error.message); // Fixed: Changed e.message to error.message
     }
 }
 
@@ -1111,8 +1105,8 @@ function renderNodesAndLines(nodesData) {
         // Calculate available width for text considering padding and icon
         let iconWidthForCalc = 0;
         if (style.icon && style.icon !== '') {
-            const tempIcon = new Konva.Text({ text: style.icon, fontSize: style.iconSize, fontFamily: style.fontFamily });
-            iconWidthForCalc = tempIcon.width() + style.iconSpacing;
+            const tempIconForCalc = new Konva.Text({ text: style.icon, fontSize: style.iconSize, fontFamily: style.fontFamily });
+            iconWidthForCalc = tempIconForCalc.width() + style.iconSpacing;
         }
         const textRenderWidth = style.width - (2 * style.padding) - iconWidthForCalc;
 
@@ -1300,7 +1294,7 @@ function renderNodesAndLines(nodesData) {
             if (e.target.name() === 'readMoreIndicator') return; // Handled by its own listener
             if (this.isDragging && this.isDragging()) { return; } // Don't select if it was a drag operation
 
-            const isPrimaryInteraction = (ev.evt.button === 0 && ev.type === 'click') || ev.type === 'tap';
+            const isPrimaryInteraction = (e.evt.button === 0 && e.type === 'click') || e.type === 'tap'; // Fixed: Use e.evt.button
 
             if (isPrimaryInteraction) {
                 if (contextMenuJustOpened) { // If context menu was just opened by this click/tap (e.g., long press)
@@ -1690,7 +1684,7 @@ async function suggestChildNodesWithAI(targetNodeKonva) {
             });
             await batch.commit();
         } else {
-            alert("AI không thể đưa ra gợi ý nào phù intimidating vào lúc này.");
+            alert("AI không thể đưa ra gợi ý nào phù hợp vào lúc này."); // Fixed: Changed "intimidating" to "phù hợp"
         }
     } catch (error) {
         console.error("Error calling Gemini API (suggestChildNodesWithAI):", error);
@@ -2150,11 +2144,22 @@ Hãy cung cấp dàn ý của bạn:`;
     }
 }
 
+// Helper function to find all descendant node IDs
+function findAllDescendantNodeIds(parentNodeId, allNodes) {
+    let descendantIds = [];
+    const directChildren = allNodes.filter(node => node.parentId === parentNodeId);
+    for (const child of directChildren) {
+        descendantIds.push(child.id);
+        descendantIds = descendantIds.concat(findAllDescendantNodeIds(child.id, allNodes)); // Recursively find children of children
+    }
+    return descendantIds;
+}
+
 // NEW: AI-driven Layout Optimization
 async function optimizeLayoutWithAI(targetNodeId = null) {
     console.log("Attempting to optimize layout with AI. Target Node ID:", targetNodeId); // Debug log
-    if (!currentKonvaStage || !currentKonvaLayer || !currentMindMapId || !db || !currentUser) {
-        alert("Không thể tối ưu hóa bố cục. Canvas hoặc cơ sở dữ liệu chưa sẵn sàng.");
+    if (!generativeModel || !currentKonvaStage || !currentKonvaLayer || !currentMindMapId || !db || !currentUser) {
+        alert("Không thể tối ưu hóa bố cục. Canvas, AI hoặc cơ sở dữ liệu chưa sẵn sàng.");
         return;
     }
 
@@ -2166,6 +2171,7 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
     }
 
     showLoadingIndicator("AI đang tối ưu hóa bố cục sơ đồ...");
+    hideContextMenu(); // Hide context menu immediately
 
     let nodesToOptimize = [];
     let rootNodeForLayout = null;
@@ -2201,99 +2207,125 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         return;
     }
 
-    // Prepare data for layout algorithm: convert to a simpler graph structure
-    const graphNodes = nodesToOptimize.map(node => ({
-        id: node.id,
-        text: node.text,
-        parentId: node.parentId,
-        level: node.level, // Use existing level or calculate if needed
-        width: node.style?.width || DEFAULT_NODE_STYLE.width,
-        height: node.style?.minHeight || DEFAULT_NODE_STYLE.minHeight, // Use minHeight for layout calc
-    }));
+    // Prepare data for Gemini: convert to a simpler graph structure with estimated dimensions
+    const graphNodesForAI = nodesToOptimize.map(node => {
+        // Get the actual Konva node to get its current rendered dimensions
+        const konvaNode = currentKonvaLayer.findOne(`#${node.id}`);
+        let actualWidth = node.style?.width || DEFAULT_NODE_STYLE.width;
+        let actualHeight = node.style?.minHeight || DEFAULT_NODE_STYLE.minHeight;
 
-    // Simple hierarchical layout algorithm (for demonstration)
-    // This is a basic implementation and can be replaced with more sophisticated algorithms
-    const layoutAlgorithm = (nodes, rootId, initialX, initialY, horizontalSpacing, verticalSpacing) => {
-        const positions = {};
-        const childrenMap = new Map();
-        nodes.forEach(node => {
-            if (node.parentId) {
-                if (!childrenMap.has(node.parentId)) {
-                    childrenMap.set(node.parentId, []);
+        if (konvaNode) {
+            const shape = konvaNode.findOne('.nodeShape');
+            if (shape) {
+                actualWidth = shape.width();
+                actualHeight = shape.height();
+            }
+        }
+        return {
+            id: node.id,
+            text: node.text,
+            parentId: node.parentId,
+            level: node.level,
+            width: actualWidth,
+            height: actualHeight,
+            // Add current position as a hint for AI, if it's optimizing a branch
+            currentX: node.position.x,
+            currentY: node.position.y
+        };
+    });
+
+    // Determine the root node for the AI's layout calculation.
+    // This is crucial for AI to understand the hierarchy.
+    // If optimizing a branch, the targetNodeId is the root.
+    // If optimizing the whole map, find the actual root (parentId === null).
+    let aiLayoutRootId = rootNodeForLayout.id;
+
+
+    // Construct the prompt for Gemini
+    const prompt = `Bạn là một chuyên gia bố cục sơ đồ tư duy. Dưới đây là danh sách các nút trong một sơ đồ tư duy (hoặc một nhánh của sơ đồ tư duy), bao gồm ID, nội dung, ID nút cha (nếu có), cấp độ, chiều rộng và chiều cao ước tính. Nhiệm vụ của bạn là tính toán vị trí (x, y) tối ưu cho mỗi nút để tạo ra một bố cục sơ đồ tư duy rõ ràng, dễ đọc, không chồng chéo, và có tính thẩm mỹ.
+
+Các nguyên tắc cần tuân thủ:
+- Nút gốc (có parentId là null hoặc là nút được chỉ định làm gốc của nhánh) nên được đặt ở vị trí trung tâm, gần đầu của không gian bố cục mới.
+- Các nút con nên phân bổ xung quanh nút cha của chúng một cách hợp lý (ví dụ: tỏa tròn, hoặc theo chiều ngang/dọc nếu cấp độ sâu).
+- Đảm bảo có đủ khoảng cách giữa các nút để tránh chồng chéo.
+- Giữ cho các đường nối ngắn và ít giao cắt nhất có thể.
+- Cố gắng duy trì một số định hướng ban đầu của sơ đồ nếu có thể, nhưng ưu tiên bố cục rõ ràng.
+- Toàn bộ sơ đồ (hoặc nhánh) nên được căn giữa trong một không gian hợp lý.
+- Trả về một đối tượng JSON, trong đó khóa là ID nút và giá trị là một đối tượng {x: number, y: number}. Chỉ trả về đối tượng JSON, không có văn bản giải thích, không có markdown code block, không có lời giới thiệu hay kết luận.
+
+Dữ liệu nút đầu vào:
+${JSON.stringify(graphNodesForAI, null, 2)}
+
+Hãy bắt đầu đối tượng JSON của bạn:`;
+
+    try {
+        const result = await generativeModel.generateContent(prompt);
+        const response = result.response;
+        const layoutJsonString = response.text().trim();
+
+        console.log("AI Raw Layout Response:", layoutJsonString); // Debug AI's raw output
+
+        let newPositions;
+        try {
+            newPositions = JSON.parse(layoutJsonString);
+        } catch (parseError) {
+            console.error("Error parsing AI layout response:", parseError);
+            alert("AI đã trả về một định dạng không hợp lệ cho bố cục. Vui lòng thử lại.");
+            hideLoadingIndicator();
+            return;
+        }
+
+        // Validate the structure of newPositions
+        if (typeof newPositions !== 'object' || newPositions === null) {
+            alert("AI đã trả về dữ liệu bố cục không đúng định dạng (không phải đối tượng).");
+            hideLoadingIndicator();
+            return;
+        }
+
+        const batch = writeBatch(db);
+        let updatesCount = 0;
+
+        // Calculate offset to center the new layout
+        // Find min/max X/Y from AI's proposed positions
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+
+        for (const nodeId in newPositions) {
+            if (newPositions.hasOwnProperty(nodeId)) {
+                const pos = newPositions[nodeId];
+                if (typeof pos.x === 'number' && typeof pos.y === 'number') {
+                    minX = Math.min(minX, pos.x);
+                    minY = Math.min(minY, pos.y);
+                    maxX = Math.max(maxX, pos.x + (allNodesDataForCurrentMap.find(n => n.id === nodeId)?.style?.width || DEFAULT_NODE_STYLE.width));
+                    maxY = Math.max(maxY, pos.y + (allNodesDataForCurrentMap.find(n => n.id === nodeId)?.style?.minHeight || DEFAULT_NODE_STYLE.minHeight));
                 }
-                childrenMap.get(node.parentId).push(node);
+            }
+        }
+
+        const layoutWidth = maxX - minX;
+        const layoutHeight = maxY - minY;
+
+        const canvasWidth = currentKonvaStage.width();
+        const canvasHeight = currentKonvaStage.height();
+
+        // Calculate offset to center the entire AI-generated layout on the current canvas view
+        const offsetX = (canvasWidth / 2) - (layoutWidth / 2) - minX;
+        const offsetY = (canvasHeight / 2) - (layoutHeight / 2) - minY;
+
+        nodesToOptimize.forEach(node => {
+            const newPosFromAI = newPositions[node.id];
+            if (newPosFromAI && typeof newPosFromAI.x === 'number' && typeof newPosFromAI.y === 'number') {
+                const finalX = newPosFromAI.x + offsetX;
+                const finalY = newPosFromAI.y + offsetY;
+
+                // Only update if position has significantly changed to avoid unnecessary writes
+                if (Math.abs(node.position.x - finalX) > 1 || Math.abs(node.position.y - finalY) > 1) {
+                    batch.update(doc(db, "nodes", node.id), { position: { x: finalX, y: finalY } });
+                    updatesCount++;
+                }
             }
         });
 
-        // Sort children for consistent layout
-        childrenMap.forEach(children => {
-            children.sort((a, b) => a.text.localeCompare(b.text));
-        });
-
-        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0 }];
-        const visited = new Set();
-        let currentLevelY = { 0: initialY }; // Tracks Y position for each level
-        let currentLevelMaxX = { 0: initialX + (nodes.find(n => n.id === rootId)?.width || DEFAULT_NODE_STYLE.width) / 2 }; // Tracks max X for each level
-
-        while (queue.length > 0) {
-            const current = queue.shift();
-            if (visited.has(current.id)) continue;
-            visited.add(current.id);
-
-            positions[current.id] = { x: current.x, y: current.y };
-
-            const directChildren = childrenMap.get(current.id) || [];
-            let childStartX = current.x - (directChildren.length - 1) * (horizontalSpacing + DEFAULT_NODE_STYLE.width) / 2; // Center children under parent
-
-            directChildren.forEach((child, index) => {
-                const childLevel = current.level + 1;
-                const childY = (currentLevelY[childLevel] || (current.y + (nodes.find(n => n.id === current.id)?.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing));
-                
-                let childX = childStartX + index * (DEFAULT_NODE_STYLE.width + horizontalSpacing);
-
-                // Adjust X to avoid overlap with previous nodes on the same level
-                if (currentLevelMaxX[childLevel] && childX < currentLevelMaxX[childLevel] + horizontalSpacing) {
-                    childX = currentLevelMaxX[childLevel] + horizontalSpacing;
-                }
-
-                queue.push({ id: child.id, x: childX, y: childY, level: childLevel });
-                currentLevelY[childLevel] = childY;
-                currentLevelMaxX[childLevel] = childX + DEFAULT_NODE_STYLE.width;
-            });
-        }
-        return positions;
-    };
-
-    // Find the actual root node for the layout
-    let layoutRootId = rootNodeForLayout.id;
-    
-    // No need for this check anymore, as it's handled above
-    // if (!layoutRootId) {
-    //     alert("Không tìm thấy node gốc để tối ưu hóa bố cục.");
-    //     hideLoadingIndicator();
-    //     return;
-    // }
-
-
-    const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
-    const initialY = 50;
-    const horizontalSpacing = 80;
-    const verticalSpacing = 60;
-
-    const newPositions = layoutAlgorithm(graphNodes, layoutRootId, initialX, initialY, horizontalSpacing, verticalSpacing);
-
-    // Apply updates to Firestore in a batch
-    const batch = writeBatch(db);
-    let updatesCount = 0;
-    nodesToOptimize.forEach(node => {
-        const newPos = newPositions[node.id];
-        if (newPos && (node.position.x !== newPos.x || node.position.y !== newPos.y)) {
-            batch.update(doc(db, "nodes", node.id), { position: newPos });
-            updatesCount++;
-        }
-    });
-
-    try {
         if (updatesCount > 0) {
             await batch.commit();
             alert(`AI đã tối ưu hóa bố cục cho ${updatesCount} nút.`);
@@ -2301,8 +2333,13 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
             alert("Không có thay đổi bố cục đáng kể nào được AI đề xuất.");
         }
     } catch (error) {
-        console.error("Error optimizing layout:", error);
-        alert("Lỗi khi tối ưu hóa bố cục: " + error.message);
+        console.error("Error calling Gemini API for layout optimization:", error);
+        let userMessage = "Lỗi khi AI tối ưu hóa bố cục: " + error.message;
+        if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
+        else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
+        else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
+        alert(userMessage);
     } finally {
         hideLoadingIndicator();
     }
