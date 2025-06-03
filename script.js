@@ -2246,10 +2246,11 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
 
 Các nguyên tắc cần tuân thủ:
 - Nút gốc (có parentId là null hoặc là nút được chỉ định làm gốc của nhánh) nên được đặt ở vị trí trung tâm, gần đầu của không gian bố cục mới.
-- Các nút con nên phân bổ xung quanh nút cha của chúng một cách hợp lý (ví dụ: tỏa tròn, hoặc theo chiều ngang/dọc nếu cấp độ sâu).
-- Đảm bảo có đủ khoảng cách giữa các nút để tránh chồng chéo.
+- Các nút con trực tiếp (cấp độ 1) của nút gốc nên được phân bổ theo dạng tỏa tròn (radial) hoặc bán nguyệt (semi-circle) xung quanh nút gốc, tạo cảm giác mở rộng từ trung tâm.
+- Các nút ở cấp độ sâu hơn (cấp độ 2, 3, v.v.) nên được sắp xếp theo dạng cây (tree-like) từ nút cha của chúng, ưu tiên phát triển theo chiều dọc hoặc ngang một cách có cấu trúc để tạo ra các nhánh rõ ràng.
+- Đảm bảo có đủ khoảng cách giữa các nút để tránh chồng chéo hoàn toàn, và các đường nối không bị rối.
 - Giữ cho các đường nối ngắn và ít giao cắt nhất có thể.
-- Cố gắng duy trì một số định hướng ban đầu của sơ đồ nếu có thể, nhưng ưu tiên bố cục rõ ràng.
+- Cố gắng duy trì một số định hướng ban đầu của sơ đồ nếu có thể, nhưng ưu tiên bố cục rõ ràng và dễ theo dõi.
 - Toàn bộ sơ đồ (hoặc nhánh) nên được căn giữa trong một không gian hợp lý.
 - Trả về một đối tượng JSON, trong đó khóa là ID nút và giá trị là một đối tượng {x: number, y: number}. Chỉ trả về đối tượng JSON, không có văn bản giải thích, không có markdown code block, không có lời giới thiệu hay kết luận.
 
