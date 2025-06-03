@@ -780,8 +780,8 @@ function initKonvaStage() {
                             }
                             // Show context menu at touch position
                             if (contextMenu && touchStartPointerPositionForContextMenu) {
-                                contextMenu.style.top = touchStartPointerPositionForContextMenu.y + 'px';
-                                contextMenu.style.left = touchStartPointerPositionForContextMenu.x + 'px';
+                                contextMenu.style.top = e_context.evt.pageY + 'px'; // FIX: Use e_context.evt.pageY/X for Konva contextmenu
+                                contextMenu.style.left = e_context.evt.pageX + 'px';
                                 showElement(contextMenu);
                                 contextMenuJustOpened = true;
                             }
@@ -1946,7 +1946,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
             alert(`AI đã tạo một nút tóm tắt con cho nhánh "${rootNodeTextPreview}".`);
 
         } else {
-             openAiResponseModal(
+            openAiResponseModal(
                 `AI Tóm tắt nhánh: "${rootNodeTextPreview}"`,
                 truncatedContent, // Show what was sent to AI
                 "AI không thể tạo tóm tắt cho nhánh này vào lúc này. Vui lòng thử lại hoặc kiểm tra nội dung nhánh."
@@ -2157,7 +2157,7 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         return;
     }
 
-    // FIX: Check if there are any nodes to optimize at all
+    // Check if there are any nodes to optimize at all
     if (allNodesDataForCurrentMap.length === 0) {
         alert("Không có nút nào trong sơ đồ để tối ưu hóa bố cục.");
         hideLoadingIndicator();
@@ -2193,7 +2193,7 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         console.log("Optimizing entire map. Root node:", rootNodeForLayout?.text);
     }
 
-    // FIX: If after determining the scope, nodesToOptimize is still empty or rootNodeForLayout is null
+    // If after determining the scope, nodesToOptimize is still empty or rootNodeForLayout is null
     if (nodesToOptimize.length === 0 || !rootNodeForLayout) {
         alert("Không tìm thấy nút nào phù hợp để tối ưu hóa bố cục. Đảm bảo sơ đồ có ít nhất một nút.");
         hideLoadingIndicator();
@@ -2210,11 +2210,12 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
         height: node.style?.minHeight || DEFAULT_NODE_STYLE.minHeight, // Use minHeight for layout calc
     }));
 
-    // Simple hierarchical layout algorithm (for demonstration)
-    // This is a basic implementation and can be replaced with more sophisticated algorithms
+    // Symmetrical Hierarchical Layout Algorithm
     const layoutAlgorithm = (nodes, rootId, initialX, initialY, horizontalSpacing, verticalSpacing) => {
         const positions = {};
         const childrenMap = new Map();
+        const nodeDataMap = new Map(nodes.map(node => [node.id, node]));
+
         nodes.forEach(node => {
             if (node.parentId) {
                 if (!childrenMap.has(node.parentId)) {
@@ -2224,35 +2225,37 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
             }
         });
 
-        // Sort children for consistent layout
         childrenMap.forEach(children => {
             children.sort((a, b) => a.text.localeCompare(b.text));
         });
 
-        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0, nodeData: nodes.find(n => n.id === rootId) }]; // FIX: Pass nodeData for root
+        // Queue for BFS traversal: { id, x, y, level, nodeData, branchSide }
+        // branchSide: 'left' or 'right' relative to the main root
+        const queue = [{ id: rootId, x: initialX, y: initialY, level: 0, nodeData: nodeDataMap.get(rootId), branchSide: 'right' }];
         const visited = new Set();
-        
-        // Track the current Y offset for each level to stack nodes vertically
-        const levelCurrentY = { 0: initialY }; 
-        // Track the maximum X reached at each level to place subsequent nodes
-        const levelMaxX = {}; 
+
+        // Track current Y offset for each branch side at each level
+        // This helps stack nodes vertically within their respective branches
+        const levelCurrentY = { 0: { left: initialY, right: initialY } }; 
+        // Track the max X reached on the right side and min X reached on the left side for each level
+        const levelBoundaryX = { 0: { left: initialX, right: initialX + (nodeDataMap.get(rootId)?.width || DEFAULT_NODE_STYLE.width) } };
 
         while (queue.length > 0) {
             const current = queue.shift();
             if (visited.has(current.id)) continue;
             visited.add(current.id);
 
-            positions[current.id] = { x: current.x, y: current.y }; // Store position for current node
+            positions[current.id] = { x: current.x, y: current.y };
 
             const directChildren = childrenMap.get(current.id) || [];
             const currentNodeWidth = current.nodeData.width || DEFAULT_NODE_STYLE.width;
             const currentNodeHeight = current.nodeData.height || DEFAULT_NODE_STYLE.minHeight;
 
-            // Calculate starting Y for children to center them vertically around the parent's mid-point
-            // This is crucial for the vertical spread of main branches (level 1)
+            // Calculate total height of children for vertical centering/distribution
             let childrenTotalHeight = directChildren.reduce((sum, child) => sum + (child.height || DEFAULT_NODE_STYLE.minHeight) + verticalSpacing, 0) - verticalSpacing;
-            if (childrenTotalHeight < 0) childrenTotalHeight = 0; // Handle case with no children
+            if (childrenTotalHeight < 0) childrenTotalHeight = 0;
             
+            // Starting Y for children, centered vertically relative to the parent's vertical midpoint
             let currentChildY = current.y + currentNodeHeight / 2 - childrenTotalHeight / 2;
 
             directChildren.forEach((child, index) => {
@@ -2261,23 +2264,39 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
                 const childNodeHeight = child.height || DEFAULT_NODE_STYLE.minHeight;
 
                 let newChildX, newChildY;
+                let childBranchSide = current.branchSide; // Children inherit parent's branch side by default
 
-                if (current.level === 0) { // Children of the main root node (Level 1)
-                    newChildX = current.x + currentNodeWidth + horizontalSpacing;
-                    newChildY = currentChildY + index * (childNodeHeight + verticalSpacing);
+                if (current.level === 0) { // Special handling for direct children of the root (Level 1)
+                    // Alternate sides for level 1 children to create a symmetrical fan-out
+                    childBranchSide = (index % 2 === 0) ? 'right' : 'left';
+
+                    if (childBranchSide === 'right') {
+                        newChildX = current.x + currentNodeWidth + horizontalSpacing;
+                    } else { // 'left'
+                        newChildX = current.x - horizontalSpacing - childNodeWidth;
+                    }
                     
-                } else { // Children of other nodes (Level 2+) - Branch out horizontally from parent
-                    newChildX = current.x + currentNodeWidth + horizontalSpacing;
-                    newChildY = current.y + (index * (childNodeHeight + verticalSpacing)); // Stack vertically below parent
+                    // Stack children vertically on their respective sides, starting from a calculated Y for that side/level
+                    if (levelCurrentY[childLevel] && levelCurrentY[childLevel][childBranchSide] !== undefined) {
+                        newChildY = levelCurrentY[childLevel][childBranchSide];
+                    } else {
+                        newChildY = currentChildY; // Initial Y for this specific branch side at this level
+                    }
+                    // Update the Y tracker for this branch side and level
+                    levelCurrentY[childLevel] = {
+                        ...levelCurrentY[childLevel],
+                        [childBranchSide]: newChildY + childNodeHeight + verticalSpacing
+                    };
 
-                    // Ensure horizontal spacing for children of same parent
-                    // This is more about ensuring they don't overlap horizontally if multiple children
-                    // from different parents end up at similar Y levels.
-                    // For this specific layout, direct horizontal stacking from parent is key.
+                } else { // Children of non-root nodes (Level 2 and deeper)
+                    // They continue branching out horizontally from their immediate parent
+                    newChildX = current.x + currentNodeWidth + horizontalSpacing;
+                    
+                    // Stack vertically below the current parent
+                    newChildY = current.y + (index * (childNodeHeight + verticalSpacing));
                 }
                 
-                positions[child.id] = { x: newChildX, y: newChildY };
-                queue.push({ id: child.id, x: newChildX, y: newChildY, level: childLevel, nodeData: child });
+                queue.push({ id: child.id, x: newChildX, y: newChildY, level: childLevel, nodeData: child, branchSide: childBranchSide });
             });
         }
         return positions;
@@ -2286,11 +2305,10 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
 
     const initialX = (currentKonvaStage.width() / 2) - (rootNodeForLayout.width / 2 || DEFAULT_NODE_STYLE.width / 2);
     const initialY = 50;
-    // FIX: Reduced horizontal and vertical spacing for a more compact layout
     const horizontalSpacing = 40; // Reduced from 80
     const verticalSpacing = 40;   // Reduced from 60
 
-    const newPositions = layoutAlgorithm(graphNodes, rootNodeForLayout.id, initialX, initialY, horizontalSpacing, verticalSpacing); // FIX: Pass rootNodeForLayout.id
+    const newPositions = layoutAlgorithm(graphNodes, rootNodeForLayout.id, initialX, initialY, horizontalSpacing, verticalSpacing);
 
     // Apply updates to Firestore in a batch
     const batch = writeBatch(db);
