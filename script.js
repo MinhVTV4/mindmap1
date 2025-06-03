@@ -1852,6 +1852,7 @@ async function askAIAboutNode(targetNodeKonva) {
         let userMessage = "Lỗi khi AI trả lời câu hỏi: " + error.message;
         if (error.message?.includes("API key not valid")) { userMessage += "\nVui lòng kiểm tra lại thiết lập API Key trong Firebase Console cho Gemini API."; }
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
+        else if (error.message?.toLowerCase().includes("billing")){ userMessage = "Có vấn đề với cài đặt thanh toán cho dự án Firebase của bạn. Vui lòng kiểm tra trong Google Cloud Console."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
         openAiResponseModal("Lỗi AI", userQuestion.trim(), userMessage);
@@ -1925,7 +1926,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
                 parentId: rootNodeId, // Child of the node that was summarized
                 text: `📄 Tóm tắt nhánh:\n${summaryText}`,
                 position: {
-                    x: targetNodeKonva.x() + parentWidth / 4 + 10, // Position it near the parent
+                    x: targetNodeKonva.x() + parentWidth / 4 + 10,
                     y: targetNodeKonva.y() + parentHeight + 35
                 },
                 style: {
@@ -1959,7 +1960,7 @@ Hãy cung cấp bản tóm tắt dưới dạng một đoạn văn bản duy nh�
         else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) { userMessage = "Bạn đã gửi quá nhiều yêu cầu tới AI hoặc đã hết hạn ngạch. Vui lòng thử lại sau ít phút."; }
         else if (error.message?.toLowerCase().includes("model not found")){ userMessage = "Model AI không được tìm thấy. Vui lòng kiểm tra lại tên model đã cấu hình.";}
         else if (error.message?.toLowerCase().includes("candidate.safetyRatings")){ userMessage = "Phản hồi từ AI bị chặn do vấn đề an toàn nội dung.";}
-        openAiResponseModal( `Lỗi AI khi tóm tắt nhánh`, truncatedContent, userMessage );
+        openAiResponseModal( `Lỗi AI khi tạo dàn ý`, truncatedContent, userMessage );
     } finally {
         hideLoadingIndicator();
     }
@@ -2178,7 +2179,7 @@ async function optimizeLayoutWithAI(targetNodeId = null) {
             return;
         }
         // Collect all nodes in the branch
-        const branchNodeIds = [rootNodeForLayout.id].concat(findAllDescendantNodeIds(rootNodeForLayout.id, allNodesDataForCurrentMap)); // FIX: Use rootNodeForLayout.id
+        const branchNodeIds = [rootNodeForLayout.id].concat(findAllDescendantNodeIds(rootNodeForLayout.id, allNodesDataForCurrentMap));
         nodesToOptimize = allNodesDataForCurrentMap.filter(n => branchNodeIds.includes(n.id));
         console.log("Optimizing branch nodes:", nodesToOptimize.map(n => n.text));
     } else {
